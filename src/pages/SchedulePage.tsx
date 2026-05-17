@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, MoreHorizontal } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 export default function SchedulePage() {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, MapPin, Clock, Star, Calendar, Info, Users, Filter, Dumbbell } from "lucide-react";
+import { Search, MapPin, Clock, Star, Calendar, Info, Users, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -57,12 +57,14 @@ const MOCK_CLASSES = [
   }
 ];
 
+type ClassItem = typeof MOCK_CLASSES[0];
+
 export default function ClassBookingPage() {
   const [selectedDate, setSelectedDate] = useState("Hôm nay");
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<any>(null);
+  const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
 
-  const handleBookClick = (cls: any) => {
+  const handleBookClick = (cls: ClassItem) => {
     setSelectedClass(cls);
     setShowBookingModal(true);
   };

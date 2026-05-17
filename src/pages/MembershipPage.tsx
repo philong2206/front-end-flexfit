@@ -36,7 +36,7 @@ export default function MembershipPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto pb-12">
+    <div className="space-y-8 max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       <div className="text-center max-w-2xl mx-auto mb-12">
         <h1 className="text-4xl font-bold text-white mb-4">Chọn gói thành viên</h1>
         <p className="text-muted-foreground text-lg mb-8">Các gói tín dụng linh hoạt cho mọi nhu cầu tập luyện. Không phí ẩn.</p>

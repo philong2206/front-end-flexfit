@@ -1,20 +1,19 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Home, Compass, CreditCard, User, LogOut, Menu, X, 
+import {
+  Home, CreditCard, User, LogOut, Menu, X,
   LayoutGrid, CalendarDays, Activity, Bell, Search,
   ShoppingCart
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PageTransition from "@/components/layout/PageTransition";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
+  { label: "Trang chủ", path: "/", icon: Home },
   { label: "Bảng điều khiển", path: "/dashboard", icon: LayoutGrid },
   { label: "Khám phá", path: "/explore", icon: Search },
-  { label: "Lớp học", path: "/classes", icon: Compass },
   { label: "Lịch sử đặt", path: "/bookings", icon: CalendarDays },
   { label: "Tiến độ", path: "/progress", icon: Activity },
   { label: "Thành viên", path: "/membership", icon: CreditCard },
@@ -23,7 +22,7 @@ const NAV_ITEMS = [
 export function MemberLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -44,15 +43,15 @@ export function MemberLayout() {
               FLEXFIT
             </span>
           </Link>
-          
+
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center gap-6 text-sm font-medium">
             {NAV_ITEMS.map((item) => {
               const isActive = location.pathname === item.path;
               return (
-                <Link 
-                  key={item.path} 
-                  to={item.path} 
+                <Link
+                  key={item.path}
+                  to={item.path}
                   className={cn(
                     "transition-colors hover:text-white",
                     isActive ? "text-primary" : "text-muted-foreground"
@@ -63,7 +62,7 @@ export function MemberLayout() {
               );
             })}
           </nav>
-          
+
           {/* Right Actions */}
           <div className="flex items-center gap-3 md:gap-4 z-50">
             <div className="hidden sm:flex items-center gap-3 text-muted-foreground border-r border-white/10 pr-4">
@@ -78,7 +77,7 @@ export function MemberLayout() {
                 <ShoppingCart className="w-5 h-5 group-hover:text-white transition-colors" />
               </button>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <div className="hidden md:flex flex-col items-end mr-2">
                 <span className="text-sm font-bold text-white">45 Credits</span>
@@ -87,11 +86,11 @@ export function MemberLayout() {
               <Link to="/profile">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-orange-400 p-[2px] cursor-pointer hover:scale-105 transition-transform">
                   <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-xs font-bold text-white">
-                    AL
+                    {user?.fullName ? user.fullName.substring(0, 2).toUpperCase() : "U"}
                   </div>
                 </div>
               </Link>
-              <button 
+              <button
                 className="lg:hidden p-2 text-white ml-1"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               >
@@ -104,7 +103,7 @@ export function MemberLayout() {
         {/* Mobile Navigation Dropdown */}
         <AnimatePresence>
           {isMobileMenuOpen && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
@@ -114,9 +113,9 @@ export function MemberLayout() {
                 {NAV_ITEMS.map((item) => {
                   const isActive = location.pathname === item.path;
                   return (
-                    <Link 
-                      key={item.path} 
-                      to={item.path} 
+                    <Link
+                      key={item.path}
+                      to={item.path}
                       onClick={() => setIsMobileMenuOpen(false)}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 rounded-xl transition-colors",
@@ -129,14 +128,14 @@ export function MemberLayout() {
                   );
                 })}
                 <div className="h-px bg-white/10 my-2" />
-                <Link 
+                <Link
                   to="/profile"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-white/5 hover:text-white"
                 >
                   <User className="w-5 h-5" /> Hồ sơ cá nhân
                 </Link>
-                <button 
+                <button
                   onClick={() => {
                     setIsMobileMenuOpen(false);
                     handleLogout();

@@ -6,12 +6,14 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { MemberLayout } from "@/components/layout/MemberLayout";
 import { PartnerLayout } from "@/components/layout/PartnerLayout";
 import { AdminLayout } from "@/components/layout/AdminLayout";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import PageTransition from "@/components/layout/PageTransition";
 
 // Shared Pages
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
+import VerifyEmailPage from "@/pages/VerifyEmailPage";
 
 // Member Pages
 import DashboardPage from "@/pages/DashboardPage";
@@ -33,7 +35,11 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
   const { role, isAuthenticated } = useAuth();
   
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (!allowedRoles.includes(role || "")) return <Navigate to="/" replace />;
+
+  const currentRole = role?.toLowerCase() === "user" ? "member" : (role?.toLowerCase() || "");
+  const normalizedAllowed = allowedRoles.map(r => r.toLowerCase());
+  
+  if (!normalizedAllowed.includes(currentRole)) return <Navigate to="/" replace />;
   
   return <>{children}</>;
 }
@@ -44,16 +50,21 @@ function AnimatedRoutes() {
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        {/* Public Routes */}
-        <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
+        {/* Public Routes with Shared Layout */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
+          <Route path="/explore" element={<PageTransition><ExplorePage /></PageTransition>} />
+          <Route path="/membership" element={<PageTransition><MembershipPage /></PageTransition>} />
+        </Route>
+
+        {/* Auth Routes */}
         <Route path="/login" element={<PageTransition><LoginPage /></PageTransition>} />
         <Route path="/register" element={<PageTransition><RegisterPage /></PageTransition>} />
+        <Route path="/verify-email" element={<PageTransition><VerifyEmailPage /></PageTransition>} />
 
         {/* Member Routes */}
         <Route element={<ProtectedRoute allowedRoles={["member"]}><MemberLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/explore" element={<ExplorePage />} />
-          <Route path="/membership" element={<MembershipPage />} />
           <Route path="/classes" element={<ClassBookingPage />} />
           <Route path="/bookings" element={<MyBookingsPage />} />
           <Route path="/schedule" element={<SchedulePage />} />

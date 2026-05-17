@@ -1,9 +1,10 @@
 import { motion } from "framer-motion";
-import { CreditCard, Calendar, TrendingUp, Sparkles, Clock, MapPin, Activity, ChevronRight, CheckCircle2 } from "lucide-react";
+import { CreditCard, Calendar, TrendingUp, Sparkles, Clock, MapPin, Activity, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const activityData = [
   { name: "T2", duration: 45 },
@@ -16,12 +17,16 @@ const activityData = [
 ];
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const nameParts = user?.fullName?.split(' ') || [];
+  const firstName = nameParts.length > 0 ? nameParts[nameParts.length - 1] : "bạn";
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Bảng điều khiển</h1>
-          <p className="text-muted-foreground text-lg">Chào mừng trở lại, Alex. Sẵn sàng tập luyện chưa?</p>
+          <p className="text-muted-foreground text-lg">Chào mừng trở lại, {firstName}. Sẵn sàng tập luyện chưa?</p>
         </div>
         <div className="flex items-center gap-3">
           <Link to="/explore">

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Flame, Trophy, TrendingUp, Target, Award, Calendar, Activity } from "lucide-react";
+import { Flame, Trophy, TrendingUp, Target, Activity } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
 

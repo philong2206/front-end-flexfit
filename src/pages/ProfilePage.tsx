@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { User, Mail, Phone, Lock, CreditCard, Bell, Shield, LogOut, Camera } from "lucide-react";
+import { User, Mail, Phone, CreditCard, Bell, Shield, LogOut, Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 export default function ProfilePage() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
+
+  const nameParts = user?.fullName?.split(' ') || [];
+  const ten = nameParts.length > 0 ? nameParts[nameParts.length - 1] : "";
+  const ho = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0] || "";
 
   const handleLogout = () => {
     logout();
@@ -31,15 +35,15 @@ export default function ProfilePage() {
               <div className="relative mb-4 group cursor-pointer">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-primary to-orange-400 p-1">
                   <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-3xl font-bold text-white overflow-hidden relative">
-                    AL
+                    {user?.fullName ? user.fullName.substring(0, 2).toUpperCase() : "U"}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <Camera className="w-6 h-6 text-white" />
                     </div>
                   </div>
                 </div>
               </div>
-              <h2 className="text-xl font-bold text-white">Alex Nguyen</h2>
-              <p className="text-sm text-muted-foreground mb-4">alex@example.com</p>
+              <h2 className="text-xl font-bold text-white">{user?.fullName || "Người dùng"}</h2>
+              <p className="text-sm text-muted-foreground mb-4">{user?.email || "Chưa cập nhật email"}</p>
               <div className="w-full bg-primary/10 text-primary px-4 py-2 rounded-lg text-sm font-medium border border-primary/20">
                 Thành viên FLEXFIT Pro
               </div>
@@ -70,19 +74,19 @@ export default function ProfilePage() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Tên</label>
-                    <Input defaultValue="Alex" className="bg-black/50 border-white/10 text-white focus-visible:ring-primary" />
+                    <label className="text-sm font-medium text-muted-foreground">Họ và đệm</label>
+                    <Input defaultValue={ho} className="bg-black/50 border-white/10 text-white focus-visible:ring-primary" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Họ</label>
-                    <Input defaultValue="Nguyen" className="bg-black/50 border-white/10 text-white focus-visible:ring-primary" />
+                    <label className="text-sm font-medium text-muted-foreground">Tên</label>
+                    <Input defaultValue={ten} className="bg-black/50 border-white/10 text-white focus-visible:ring-primary" />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Email</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input defaultValue="alex@example.com" disabled className="pl-10 bg-black/20 border-white/5 text-muted-foreground" />
+                    <Input defaultValue={user?.email || ""} disabled className="pl-10 bg-black/20 border-white/5 text-muted-foreground" />
                   </div>
                 </div>
                 <div className="space-y-2">

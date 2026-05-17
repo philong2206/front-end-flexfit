@@ -1,15 +1,12 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { 
-  Home, Search, CalendarDays, ShoppingBag, 
-  ShoppingCart, Crown, LayoutGrid, LogIn,
+  ShoppingBag, 
   Zap, ShieldCheck, Clock, ArrowRight,
-  Dumbbell, Star, MapPin, User, LogOut
+  Dumbbell, Star, MapPin
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useAuth } from "@/contexts/AuthContext";
 
 const CATEGORIES = [
   { name: "Phòng Gym", count: "10 địa điểm", emoji: "🏋️" },
@@ -86,117 +83,8 @@ const fadeIn = {
 };
 
 export default function LandingPage() {
-  const { isAuthenticated, logout } = useAuth();
-  const navigate = useNavigate();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-
-  const handleLogout = () => {
-    logout();
-    navigate("/");
-  };
-
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans selection:bg-primary/30">
-      
-      {/* Top Navbar */}
-      <header className="border-b border-white/5 bg-background/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white transition-transform group-hover:scale-105 shadow-[0_0_15px_rgba(249,115,22,0.4)]">
-              FF
-            </div>
-            <span className="text-xl font-bold tracking-tighter text-white uppercase group-hover:text-primary transition-colors">
-              FLEXFIT
-            </span>
-          </Link>
-          
-          <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            <Link to="/" className="flex items-center gap-2 text-primary">
-              <Home className="w-4 h-4" /> Trang chủ
-            </Link>
-            <Link to="/explore" className="flex items-center gap-2 hover:text-white transition-colors">
-              <Search className="w-4 h-4" /> Khám phá
-            </Link>
-            <Link to="/bookings" className="flex items-center gap-2 hover:text-white transition-colors">
-              <CalendarDays className="w-4 h-4" /> Lịch đã đặt
-            </Link>
-            <Link to="/explore" className="flex items-center gap-2 hover:text-white transition-colors">
-              <ShoppingBag className="w-4 h-4" /> Cửa hàng
-            </Link>
-            <Link to="/membership" className="flex items-center gap-2 hover:text-white transition-colors">
-              <Crown className="w-4 h-4" /> Thành viên
-            </Link>
-            <Link to="/dashboard" className="flex items-center gap-2 hover:text-white transition-colors">
-              <LayoutGrid className="w-4 h-4" /> Dashboard
-            </Link>
-          </nav>
-          
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-4 text-muted-foreground border-r border-white/10 pr-4">
-              <div className="relative group cursor-pointer">
-                <ShoppingCart className="w-5 h-5 group-hover:text-white transition-colors" />
-                <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">2</span>
-              </div>
-            </div>
-            {isAuthenticated ? (
-              <div className="flex items-center gap-2">
-                <div className="hidden md:flex flex-col items-end mr-2">
-                  <span className="text-sm font-bold text-white">45 Credits</span>
-                  <span className="text-xs text-primary">Pro Member</span>
-                </div>
-                <div className="relative">
-                  <div 
-                    className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-orange-400 p-[2px] cursor-pointer hover:scale-105 transition-transform"
-                    onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  >
-                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-xs font-bold text-white">
-                      AL
-                    </div>
-                  </div>
-                  
-                  <AnimatePresence>
-                    {isProfileOpen && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute right-0 top-12 w-56 bg-secondary/95 border border-white/10 backdrop-blur-xl rounded-xl shadow-2xl overflow-hidden py-1 z-50"
-                      >
-                        <Link to="/profile" className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
-                          <User className="w-4 h-4" />
-                          <span>Hồ sơ cá nhân</span>
-                        </Link>
-                        <Link to="/dashboard" className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors">
-                          <LayoutGrid className="w-4 h-4" />
-                          <span>Bảng điều khiển</span>
-                        </Link>
-                        <div className="h-px bg-white/10 my-1 w-full" />
-                        <button 
-                          onClick={handleLogout} 
-                          className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          <span>Đăng xuất</span>
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            ) : (
-              <Link to="/login">
-                <Button variant="ghost" className="text-primary hover:bg-primary/10 gap-2 border border-primary/20 transition-all hover:scale-105">
-                  <LogIn className="w-4 h-4" /> Đăng nhập
-                </Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1">
-        
+    <div className="w-full flex flex-col">
         {/* Hero Section */}
         <section className="relative h-[600px] md:h-[700px] flex items-center justify-center overflow-hidden">
           <motion.div 
@@ -419,49 +307,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-      </main>
-
-      <footer className="border-t border-white/5 bg-secondary pt-16 pb-8">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-            <div className="col-span-1 md:col-span-2">
-              <Link to="/" className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white text-sm">FF</div>
-                <span className="font-bold text-xl text-white uppercase tracking-tighter">FLEXFIT</span>
-              </Link>
-              <p className="text-muted-foreground max-w-sm">
-                Nền tảng thể thao kết nối hàng ngàn phòng gym và studio trên toàn quốc. Tập luyện mọi lúc, mọi nơi chỉ với một tài khoản.
-              </p>
-            </div>
-            <div>
-              <h4 className="text-white font-bold mb-4">Khám phá</h4>
-              <ul className="space-y-2 text-muted-foreground text-sm">
-                <li><Link to="/explore" className="hover:text-primary transition-colors">Phòng Gym</Link></li>
-                <li><Link to="/explore" className="hover:text-primary transition-colors">Yoga Studio</Link></li>
-                <li><Link to="/explore" className="hover:text-primary transition-colors">Sản phẩm</Link></li>
-                <li><Link to="/membership" className="hover:text-primary transition-colors">Bảng giá</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-bold mb-4">Hỗ trợ</h4>
-              <ul className="space-y-2 text-muted-foreground text-sm">
-                <li><a href="#" className="hover:text-primary transition-colors">Trung tâm trợ giúp</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Điều khoản sử dụng</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Bảo mật</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Liên hệ</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row justify-between items-center text-muted-foreground text-sm">
-            <p>© 2026 FlexFit Inc. All rights reserved.</p>
-            <div className="flex gap-4 mt-4 md:mt-0">
-              <a href="#" className="hover:text-white transition-colors">Facebook</a>
-              <a href="#" className="hover:text-white transition-colors">Instagram</a>
-              <a href="#" className="hover:text-white transition-colors">Twitter</a>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

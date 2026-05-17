@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, Building, Users, Calendar, BarChart3, Settings, LogOut, Menu, X, LayoutGrid, Megaphone, Star } from "lucide-react";
+import { Building, Users, Calendar, BarChart3, Settings, LogOut, Menu, X, LayoutGrid, Megaphone, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PageTransition from "@/components/layout/PageTransition";
 import { useAuth } from "@/contexts/AuthContext";

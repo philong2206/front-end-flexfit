@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Users, Building2, Activity, ShieldCheck, TrendingUp, AlertTriangle, ChevronRight, Download } from "lucide-react";
+import { Users, Building2, Activity, ShieldCheck, TrendingUp, AlertTriangle, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { Button } from "@/components/ui/button";

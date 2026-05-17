@@ -36,7 +36,7 @@ export default function ExplorePage() {
   };
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8 max-w-[1400px] space-y-8 pb-10">
       <div>
         <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Khám phá lớp học</h1>
         <p className="text-muted-foreground text-lg">Tìm và đặt chỗ lớp học từ các đối tác cao cấp của chúng tôi.</p>
