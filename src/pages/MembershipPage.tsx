@@ -3,8 +3,9 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Zap, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getCreditPackagesApi, buyCreditPackageApi } from "@/api/creditPackages";
+import { getPackagesApi, createPaymentApi } from "@/api/payment";
 import type { CreditPackageResponse } from "@/api/creditPackages";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
@@ -18,11 +19,29 @@ export default function MembershipPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Handle PayOS return URL parameters
+    const searchParams = new URLSearchParams(window.location.search);
+    const status = searchParams.get("status");
+    const cancel = searchParams.get("cancel");
+    
+    if (status) {
+      if (status === "PAID" || status === "success" || status === "SUCCESS") {
+        toast.success("Thanh toán thành công! Credit đã được cập nhật.");
+      } else {
+        toast.error("Thanh toán thất bại hoặc có lỗi xảy ra.");
+      }
+      // Clean up URL to prevent toast on refresh
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (cancel === "true") {
+      toast.error("Giao dịch đã bị hủy.");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     const fetchPackages = async () => {
       try {
         await Promise.resolve();
         setLoading(true);
-        const data = await getCreditPackagesApi();
+        const data = await getPackagesApi();
         setPackages(data.filter(p => p.isActive).sort((a, b) => a.price - b.price));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Có lỗi xảy ra khi tải danh sách gói");
@@ -30,7 +49,7 @@ export default function MembershipPage() {
         setLoading(false);
       }
     };
-    
+
     const timer = setTimeout(() => {
       fetchPackages();
     }, 0);
@@ -39,7 +58,7 @@ export default function MembershipPage() {
 
   const handleBuy = async (pkg: CreditPackageResponse) => {
     if (!user) {
-      alert("Vui lòng đăng nhập để thực hiện giao dịch.");
+      toast.error("Vui lòng đăng nhập để thực hiện giao dịch.");
       navigate("/login");
       return;
     }
@@ -50,11 +69,21 @@ export default function MembershipPage() {
 
     try {
       setPurchasing(pkg.packageId);
-      await buyCreditPackageApi(pkg.packageId, user.userId);
-      alert("Thanh toán thành công! Tài khoản của bạn đã được cộng Credit.");
-      navigate("/dashboard");
+      const res = await createPaymentApi({ packageId: pkg.packageId });
+      console.log("Payment API Response:", res);
+      
+      // Handle different possible response formats from C# backend
+      const urlToRedirect = res.checkoutUrl || res.CheckoutUrl || res.url || res.Url || res.paymentUrl || res.paymentLink || (res.data && res.data.checkoutUrl) || (typeof (res as unknown) === 'string' && (res as unknown as string).startsWith('http') ? (res as unknown as string) : null);
+
+      if (urlToRedirect) {
+        toast.info("Đang chuyển hướng đến cổng thanh toán...");
+        window.location.assign(urlToRedirect);
+      } else {
+        console.error("Could not find payment URL in response:", res);
+        toast.error("Không thể lấy được đường dẫn thanh toán. Vui lòng thử lại sau.");
+      }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Giao dịch thất bại. Vui lòng thử lại sau.");
+      toast.error(err instanceof Error ? err.message : "Giao dịch thất bại. Vui lòng thử lại sau.");
     } finally {
       setPurchasing(null);
     }
@@ -95,10 +124,9 @@ export default function MembershipPage() {
                   </span>
                 </div>
               )}
-              <Card 
-                className={`w-full flex flex-col relative overflow-hidden transition-all duration-300 cursor-pointer ${
-                  plan.isPopular ? 'border-primary bg-secondary/80 shadow-[0_0_30px_rgba(249,115,22,0.15)] scale-105 z-10' : 'bg-secondary border-white/5 hover:border-white/20 hover:bg-secondary'
-                } ${selectedPlan === plan.packageId ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
+              <Card
+                className={`w-full flex flex-col relative overflow-hidden transition-all duration-300 cursor-pointer ${plan.isPopular ? 'border-primary bg-secondary/80 shadow-[0_0_30px_rgba(249,115,22,0.15)] scale-105 z-10' : 'bg-secondary border-white/5 hover:border-white/20 hover:bg-secondary'
+                  } ${selectedPlan === plan.packageId ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
                 onClick={() => setSelectedPlan(plan.packageId)}
               >
                 {plan.isPopular && (
@@ -128,8 +156,8 @@ export default function MembershipPage() {
                   )}
                 </CardContent>
                 <CardFooter className="pb-8 pt-4 relative z-10">
-                  <Button 
-                    className={`w-full h-12 text-base font-semibold ${plan.isPopular ? 'glow-btn' : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'}`} 
+                  <Button
+                    className={`w-full h-12 text-base font-semibold ${plan.isPopular ? 'glow-btn' : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'}`}
                     variant={plan.isPopular ? 'default' : 'outline'}
                     disabled={purchasing !== null}
                     onClick={(e) => {
@@ -147,7 +175,7 @@ export default function MembershipPage() {
       )}
 
       {/* Credit Packs */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}

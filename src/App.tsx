@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { Toaster } from "sonner";
 
 // Layouts
 import { MemberLayout } from "@/components/layout/MemberLayout";
@@ -19,6 +20,8 @@ import VerifyEmailPage from "@/pages/VerifyEmailPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ExplorePage from "@/pages/ExplorePage";
 import MembershipPage from "@/pages/MembershipPage";
+import PaymentSuccessPage from "@/pages/PaymentSuccessPage";
+import PaymentCancelPage from "@/pages/PaymentCancelPage";
 import ClassBookingPage from "@/pages/ClassBookingPage";
 import MyBookingsPage from "@/pages/MyBookingsPage";
 import SchedulePage from "@/pages/SchedulePage";
@@ -62,6 +65,8 @@ function AnimatedRoutes() {
         <Route path="/login" element={<PageTransition><LoginPage /></PageTransition>} />
         <Route path="/register" element={<PageTransition><RegisterPage /></PageTransition>} />
         <Route path="/verify-email" element={<PageTransition><VerifyEmailPage /></PageTransition>} />
+        <Route path="/payment/success" element={<PageTransition><PaymentSuccessPage /></PageTransition>} />
+        <Route path="/payment/cancel" element={<PageTransition><PaymentCancelPage /></PageTransition>} />
 
         {/* Member Routes */}
         <Route element={<ProtectedRoute allowedRoles={["member"]}><MemberLayout /></ProtectedRoute>}>
@@ -107,6 +112,7 @@ function App() {
       <Router>
         <AnimatedRoutes />
       </Router>
+      <Toaster position="top-right" richColors theme="dark" />
     </AuthProvider>
   );
 }

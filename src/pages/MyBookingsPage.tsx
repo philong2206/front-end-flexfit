@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Calendar, Clock, MapPin, QrCode } from "lucide-react";
+import { Calendar, Clock, MapPin, QrCode, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { getMyGymBookingsApi, getMyClassBookingsApi, cancelGymBookingApi, cancel
 import type { BookingResponse } from "@/api/bookings";
 import { useAuth } from "@/contexts/AuthContext";
 import { refundCreditsLocally } from "@/api/creditPackages";
+import { toast } from "sonner";
 
 export default function MyBookingsPage() {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ export default function MyBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"upcoming" | "completed" | "cancelled">("upcoming");
+  const [bookingToCancel, setBookingToCancel] = useState<BookingResponse | null>(null);
 
   const fetchBookings = async () => {
     try {
@@ -28,8 +30,24 @@ export default function MyBookingsPage() {
           throw err;
       });
       
-      const gymBookings = Array.isArray(gymRes) ? gymRes : (gymRes.data || []);
-      const classBookings = Array.isArray(classRes) ? classRes : (classRes.data || []);
+      const ensureUtcString = (dateStr: string) => {
+        if (!dateStr) return dateStr;
+        if (!dateStr.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+          return `${dateStr}Z`;
+        }
+        return dateStr;
+      };
+
+      const gymBookings = (Array.isArray(gymRes) ? gymRes : (gymRes.data || [])).map((b: BookingResponse) => ({
+        ...b,
+        startTime: ensureUtcString(b.startTime),
+        endTime: ensureUtcString(b.endTime)
+      }));
+      const classBookings = (Array.isArray(classRes) ? classRes : (classRes.data || [])).map((b: BookingResponse) => ({
+        ...b,
+        startTime: ensureUtcString(b.startTime),
+        endTime: ensureUtcString(b.endTime)
+      }));
       
       const all = [...gymBookings, ...classBookings];
       all.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
@@ -69,8 +87,10 @@ export default function MyBookingsPage() {
     return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handleCancel = async (booking: BookingResponse) => {
-    if (!confirm("Bạn có chắc chắn muốn hủy lịch này?")) return;
+  const handleConfirmCancel = async () => {
+    if (!bookingToCancel) return;
+    const booking = bookingToCancel;
+    setBookingToCancel(null);
     try {
       if (booking.classId) {
         await cancelClassBookingApi(booking.bookingId);
@@ -81,10 +101,10 @@ export default function MyBookingsPage() {
         // Refund credits locally
         refundCreditsLocally(user.userId, booking.creditUsed || 4);
       }
-      alert("Hủy lịch thành công!");
+      toast.success("Hủy lịch thành công!");
       fetchBookings();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Hủy lịch thất bại");
+      toast.error(err instanceof Error ? err.message : "Hủy lịch thất bại");
     }
   };
 
@@ -161,7 +181,7 @@ export default function MyBookingsPage() {
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto">
                     {filter === "upcoming" && (
-                      <Button variant="outline" size="sm" onClick={() => handleCancel(booking)} className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-400 flex-1 sm:flex-none">Hủy lịch</Button>
+                      <Button variant="outline" size="sm" onClick={() => setBookingToCancel(booking)} className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-400 flex-1 sm:flex-none">Hủy lịch</Button>
                     )}
                     <Button variant="outline" size="sm" onClick={() => setSelectedDetailBooking(booking)} className="flex-1 sm:flex-none border-white/10 hover:bg-white/5 text-primary border-primary/20">Chi tiết</Button>
                   </div>
@@ -239,6 +259,48 @@ export default function MyBookingsPage() {
                   </Button>
                 )}
               </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Confirm Cancel Modal */}
+      {bookingToCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setBookingToCancel(null)}>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-secondary border border-white/10 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl p-6 text-center space-y-4"
+          >
+            <div className="mx-auto w-12 h-12 bg-destructive/15 rounded-full flex items-center justify-center text-destructive">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-white">Xác nhận hủy lịch</h3>
+              <p className="text-sm text-muted-foreground">
+                Bạn có chắc chắn muốn hủy lịch tập buổi <span className="text-white font-semibold">"{bookingToCancel.className || bookingToCancel.sessionName}"</span>?
+              </p>
+              <p className="text-xs text-amber-400 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20">
+                Credits phí đặt lịch sẽ được hoàn trả đầy đủ vào tài khoản của bạn.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button 
+                variant="outline" 
+                className="flex-1 border-white/10 text-white hover:bg-white/5" 
+                onClick={() => setBookingToCancel(null)}
+              >
+                Giữ lịch
+              </Button>
+              <Button 
+                className="flex-1 bg-destructive hover:bg-destructive/90 text-white font-medium"
+                onClick={handleConfirmCancel}
+              >
+                Hủy lịch
+              </Button>
             </div>
           </motion.div>
         </div>

@@ -66,8 +66,24 @@ export default function DashboardPage() {
           getAllBranchesApi().catch(() => [] as BranchDto[])
         ]);
 
-        const gymBookings = Array.isArray(gymRes) ? gymRes : (gymRes?.data || []);
-        const classBookings = Array.isArray(classRes) ? classRes : (classRes?.data || []);
+        const ensureUtcString = (dateStr: string) => {
+          if (!dateStr) return dateStr;
+          if (!dateStr.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+            return `${dateStr}Z`;
+          }
+          return dateStr;
+        };
+
+        const gymBookings = (Array.isArray(gymRes) ? gymRes : (gymRes?.data || [])).map((b: BookingResponse) => ({
+          ...b,
+          startTime: ensureUtcString(b.startTime),
+          endTime: ensureUtcString(b.endTime)
+        }));
+        const classBookings = (Array.isArray(classRes) ? classRes : (classRes?.data || [])).map((b: BookingResponse) => ({
+          ...b,
+          startTime: ensureUtcString(b.startTime),
+          endTime: ensureUtcString(b.endTime)
+        }));
 
         const all = [...gymBookings, ...classBookings];
         const now = new Date();

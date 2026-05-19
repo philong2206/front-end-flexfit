@@ -6,9 +6,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
-import { bookGymSessionApi } from "@/api/bookings";
+import { bookGymSessionApi, getMyGymBookingsApi, getMyClassBookingsApi } from "@/api/bookings";
 import { deductCreditsLocally } from "@/api/creditPackages";
 import { getAllBranchesApi } from "@/api/branches";
+import { toast } from "sonner";
 
 interface ClassItem {
   id: string;
@@ -117,7 +118,7 @@ export default function ClassBookingPage() {
 
   const handleBook = async () => {
     if (!user?.userId) {
-      alert("Vui lòng đăng nhập với tài khoản Hội viên để thực hiện đặt chỗ.");
+      toast.error("Vui lòng đăng nhập với tài khoản Hội viên để thực hiện đặt chỗ.");
       return;
     }
     if (!selectedClass) return;
@@ -126,6 +127,38 @@ export default function ClassBookingPage() {
       setIsBookingLoading(true);
       
       const { startTimeStr, endTimeStr } = parseMockTime(selectedDate, selectedClass.time);
+
+      // Overlap Validation
+      const [gymRes, classRes] = await Promise.all([
+        getMyGymBookingsApi().catch(() => []),
+        getMyClassBookingsApi().catch(() => [])
+      ]);
+      
+      const gymBookings = Array.isArray(gymRes) ? gymRes : (gymRes.data || []);
+      const classBookings = Array.isArray(classRes) ? classRes : (classRes.data || []);
+      const activeBookings = [...gymBookings, ...classBookings].filter(b => b.status?.toLowerCase() !== "cancelled");
+
+      const newStart = new Date(startTimeStr);
+      const newEnd = new Date(endTimeStr);
+
+      const ensureUtcString = (dateStr: string) => {
+        if (!dateStr) return dateStr;
+        if (!dateStr.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+          return `${dateStr}Z`;
+        }
+        return dateStr;
+      };
+
+      const hasOverlap = activeBookings.some(booking => {
+        const existStart = new Date(ensureUtcString(booking.startTime));
+        const existEnd = new Date(ensureUtcString(booking.endTime));
+        return newStart < existEnd && existStart < newEnd;
+      });
+
+      if (hasOverlap) {
+        toast.error("Bạn đã có một lịch đặt chỗ khác trùng ngày, trùng giờ với lớp học này. Vui lòng chọn khung giờ hoặc lớp học khác!");
+        return;
+      }
 
       await bookGymSessionApi({
         branchId: selectedClass.branchId,
@@ -143,7 +176,7 @@ export default function ClassBookingPage() {
         setIsBooked(false);
       }, 2000);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Đặt lịch thất bại");
+      toast.error(err instanceof Error ? err.message : "Đặt lịch thất bại");
     } finally {
       setIsBookingLoading(false);
     }
