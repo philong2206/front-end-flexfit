@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import {
   Home, Search, Crown, LogIn, ShoppingCart,
@@ -5,10 +6,43 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { getUserCreditWalletApi } from "@/api/creditPackages";
+import { parseJwt } from "@/lib/utils";
 
 export function PublicLayout() {
   const { isAuthenticated, role, user } = useAuth();
   const location = useLocation();
+  const [balance, setBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      let activeUserId = user?.userId;
+      if (!activeUserId) {
+        const token = localStorage.getItem("access_token");
+        if (token) {
+          const payload = parseJwt(token);
+          activeUserId = payload?.sub;
+        }
+      }
+      if (!activeUserId) return;
+      try {
+        const wallet = await getUserCreditWalletApi(activeUserId);
+        setBalance(wallet.balance);
+      } catch (error) {
+        console.error("Failed to fetch balance", error);
+      }
+    };
+
+    if (isAuthenticated) {
+      fetchBalance();
+    }
+
+    const handleUpdate = () => {
+      if (isAuthenticated) fetchBalance();
+    };
+    window.addEventListener("wallet-update", handleUpdate);
+    return () => window.removeEventListener("wallet-update", handleUpdate);
+  }, [user?.userId, isAuthenticated]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans selection:bg-primary/30">
@@ -32,7 +66,6 @@ export function PublicLayout() {
                 { label: "Bảng điều khiển", path: "/dashboard" },
                 { label: "Khám phá", path: "/explore" },
                 { label: "Lịch sử đặt", path: "/bookings" },
-                { label: "Tiến độ", path: "/progress" },
                 { label: "Thành viên", path: "/membership" }
               ].map(item => (
                 <Link
@@ -78,13 +111,19 @@ export function PublicLayout() {
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
                 <div className="hidden md:flex flex-col items-end mr-2">
-                  <span className="text-sm font-bold text-white">45 Credits</span>
+                  <span className="text-sm font-bold text-white">
+                    {balance !== null ? `${balance} Credits` : "... Credits"}
+                  </span>
                   <span className="text-xs text-primary">Pro Member</span>
                 </div>
                 <Link to="/profile">
                   <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-orange-400 p-[2px] cursor-pointer hover:scale-105 transition-transform">
-                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-xs font-bold text-white">
-                      {user?.fullName ? user.fullName.substring(0, 2).toUpperCase() : "U"}
+                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-xs font-bold text-white overflow-hidden">
+                      {user?.avatar ? (
+                        <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        user?.fullName ? user.fullName.substring(0, 2).toUpperCase() : "U"
+                      )}
                     </div>
                   </div>
                 </Link>

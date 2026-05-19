@@ -30,6 +30,7 @@ import PartnerDashboard from "@/pages/partner/PartnerDashboard";
 
 // Admin Pages
 import AdminDashboard from "@/pages/admin/AdminDashboard";
+import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) {
   const { role, isAuthenticated } = useAuth();
@@ -87,7 +88,7 @@ function AnimatedRoutes() {
         {/* Admin Routes */}
         <Route element={<ProtectedRoute allowedRoles={["admin"]}><AdminLayout /></ProtectedRoute>}>
           <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/users" element={<AdminDashboard />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/partners" element={<AdminDashboard />} />
           <Route path="/admin/revenue" element={<AdminDashboard />} />
           <Route path="/admin/approvals" element={<AdminDashboard />} />

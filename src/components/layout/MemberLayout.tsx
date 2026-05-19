@@ -1,21 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Home, CreditCard, User, LogOut, Menu, X,
-  LayoutGrid, CalendarDays, Activity, Bell, Search,
+  LayoutGrid, CalendarDays, Bell, Search,
   ShoppingCart
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, parseJwt } from "@/lib/utils";
 import PageTransition from "@/components/layout/PageTransition";
 import { useAuth } from "@/contexts/AuthContext";
+import { getUserCreditWalletApi } from "@/api/creditPackages";
 
 const NAV_ITEMS = [
   { label: "Trang chủ", path: "/", icon: Home },
   { label: "Bảng điều khiển", path: "/dashboard", icon: LayoutGrid },
   { label: "Khám phá", path: "/explore", icon: Search },
   { label: "Lịch sử đặt", path: "/bookings", icon: CalendarDays },
-  { label: "Tiến độ", path: "/progress", icon: Activity },
   { label: "Thành viên", path: "/membership", icon: CreditCard },
 ];
 
@@ -24,6 +24,33 @@ export function MemberLayout() {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      let activeUserId = user?.userId;
+      if (!activeUserId) {
+        const token = localStorage.getItem("access_token");
+        if (token) {
+          const payload = parseJwt(token);
+          activeUserId = payload?.sub;
+        }
+      }
+      if (!activeUserId) return;
+      try {
+        const wallet = await getUserCreditWalletApi(activeUserId);
+        setBalance(wallet.balance);
+      } catch (error) {
+        console.error("Failed to fetch balance", error);
+      }
+    };
+
+    fetchBalance();
+
+    const handleUpdate = () => fetchBalance();
+    window.addEventListener("wallet-update", handleUpdate);
+    return () => window.removeEventListener("wallet-update", handleUpdate);
+  }, [user?.userId]);
 
   const handleLogout = () => {
     logout();
@@ -80,13 +107,19 @@ export function MemberLayout() {
 
             <div className="flex items-center gap-2">
               <div className="hidden md:flex flex-col items-end mr-2">
-                <span className="text-sm font-bold text-white">45 Credits</span>
+                <span className="text-sm font-bold text-white">
+                  {balance !== null ? `${balance} Credits` : "... Credits"}
+                </span>
                 <span className="text-xs text-primary">Pro Member</span>
               </div>
               <Link to="/profile">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-orange-400 p-[2px] cursor-pointer hover:scale-105 transition-transform">
-                  <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-xs font-bold text-white">
-                    {user?.fullName ? user.fullName.substring(0, 2).toUpperCase() : "U"}
+                  <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-xs font-bold text-white overflow-hidden">
+                    {user?.avatar ? (
+                      <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      user?.fullName ? user.fullName.substring(0, 2).toUpperCase() : "U"
+                    )}
                   </div>
                 </div>
               </Link>

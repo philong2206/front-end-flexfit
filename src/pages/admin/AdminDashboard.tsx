@@ -3,6 +3,9 @@ import { Users, Building2, Activity, ShieldCheck, TrendingUp, AlertTriangle, Dow
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { getAllUsersApi } from "@/api/users";
+import { getAllGymsApi, changeGymStatusApi, type GymDto } from "@/api/gyms";
 
 const platformGrowthData = [
   { name: "T1", users: 4000, partners: 240 },
@@ -20,6 +23,67 @@ const subscriptionData = [
 ];
 
 export default function AdminDashboard() {
+  const [totalUsers, setTotalUsers] = useState<number>(0);
+  const [gyms, setGyms] = useState<GymDto[]>([]);
+  const [totalPartners, setTotalPartners] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const users = await getAllUsersApi();
+        setTotalUsers(users.length);
+      } catch (error) {
+        console.error("Lỗi khi tải người dùng:", error);
+      }
+    };
+    
+    const fetchGyms = async () => {
+      try {
+        const data = await getAllGymsApi();
+        setGyms(data);
+        setTotalPartners(data.filter(g => g.status === 'Approved').length);
+      } catch (error) {
+        console.error("Lỗi khi tải gyms:", error);
+      }
+    };
+
+    fetchUsers();
+    fetchGyms();
+  }, []);
+
+  const pendingGyms = gyms.filter(g => g.status === 'Pending');
+
+  const handleApprove = async (id: string) => {
+    try {
+      await changeGymStatusApi(id, "Approved");
+      setGyms(gyms.map(g => g.gymId === id ? { ...g, status: "Approved" } : g));
+      setTotalPartners(prev => prev + 1);
+    } catch (error) {
+      console.error("Lỗi khi duyệt:", error);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await changeGymStatusApi(id, "Rejected");
+      setGyms(gyms.map(g => g.gymId === id ? { ...g, status: "Rejected" } : g));
+    } catch (error) {
+      console.error("Lỗi khi từ chối:", error);
+    }
+  };
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const users = await getAllUsersApi();
+        setTotalUsers(users.length);
+      } catch (error) {
+        console.error("Lỗi khi tải người dùng:", error);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -32,7 +96,7 @@ export default function AdminDashboard() {
             <Download className="w-4 h-4" /> Xuất dữ liệu
           </Button>
           <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
-            <ShieldCheck className="w-4 h-4" /> Xét duyệt đối tác (12)
+            <ShieldCheck className="w-4 h-4" /> Xét duyệt đối tác ({pendingGyms.length})
           </Button>
         </div>
       </div>
@@ -45,7 +109,7 @@ export default function AdminDashboard() {
               <Users className="h-4 w-4 text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">45,231</div>
+              <div className="text-2xl font-bold text-white">{totalUsers.toLocaleString()}</div>
               <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" /> +20.1% tháng này
               </p>
@@ -60,7 +124,7 @@ export default function AdminDashboard() {
               <Building2 className="h-4 w-4 text-indigo-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">480</div>
+              <div className="text-2xl font-bold text-white">{totalPartners}</div>
               <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" /> +12 đối tác mới
               </p>
@@ -89,8 +153,8 @@ export default function AdminDashboard() {
               <AlertTriangle className="h-4 w-4 text-amber-500" />
             </CardHeader>
             <CardContent className="relative z-10">
-              <div className="text-2xl font-bold text-white">24</div>
-              <p className="text-xs text-amber-400/70 mt-1">12 duyệt gym, 12 report</p>
+              <div className="text-2xl font-bold text-white">{pendingGyms.length}</div>
+              <p className="text-xs text-amber-400/70 mt-1">{pendingGyms.length} duyệt gym, 0 report</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -198,30 +262,29 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[
-                      { name: "CityFit Center", location: "Quận 3, TP.HCM", size: "Lớn (>500m2)", date: "15/05/2026", docs: "Đầy đủ" },
-                      { name: "Yoga Master", location: "Cầu Giấy, HN", size: "Nhỏ (<200m2)", date: "14/05/2026", docs: "Thiếu PCCC" },
-                      { name: "Iron Power Gym", location: "Quận 7, TP.HCM", size: "Vừa", date: "14/05/2026", docs: "Đầy đủ" },
-                      { name: "Aqua Swim", location: "Thủ Đức, TP.HCM", size: "Lớn", date: "12/05/2026", docs: "Đầy đủ" },
-                    ].map((gym, i) => (
-                      <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="px-4 py-4 font-medium text-white">{gym.name}</td>
-                        <td className="px-4 py-4">{gym.location}</td>
-                        <td className="px-4 py-4">{gym.size}</td>
-                        <td className="px-4 py-4">{gym.date}</td>
-                        <td className="px-4 py-4">
-                          <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider ${
-                            gym.docs === 'Đầy đủ' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                          }`}>
-                            {gym.docs}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <Button size="sm" className="h-8 px-3 bg-primary text-primary-foreground hover:bg-primary/90 mr-2">Duyệt</Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-400/10">Từ chối</Button>
-                        </td>
+                    {pendingGyms.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-center py-8">Không có đối tác nào đang chờ duyệt.</td>
                       </tr>
-                    ))}
+                    ) : (
+                      pendingGyms.map((gym) => (
+                        <tr key={gym.gymId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-4 py-4 font-medium text-white">{gym.gymName}</td>
+                          <td className="px-4 py-4">{gym.description?.substring(0, 30) || "Không có mô tả"}...</td>
+                          <td className="px-4 py-4">{gym.email}</td>
+                          <td className="px-4 py-4">{new Date(gym.createdAt).toLocaleDateString("vi-VN")}</td>
+                          <td className="px-4 py-4">
+                            <span className="px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider bg-amber-500/20 text-amber-400">
+                              Chờ duyệt
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <Button size="sm" onClick={() => handleApprove(gym.gymId)} className="h-8 px-3 bg-primary text-primary-foreground hover:bg-primary/90 mr-2">Duyệt</Button>
+                            <Button variant="ghost" onClick={() => handleReject(gym.gymId)} size="sm" className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-400/10">Xóa</Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

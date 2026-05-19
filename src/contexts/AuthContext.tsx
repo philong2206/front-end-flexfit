@@ -1,12 +1,15 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { parseJwt } from "@/lib/utils";
 
 export type Role = "member" | "partner" | "admin" | null;
 
 export interface User {
+  userId?: string;
   fullName: string;
   email: string;
   role: Role;
   avatar?: string;
+  phoneNumber?: string;
 }
 
 interface AuthContextType {
@@ -28,7 +31,23 @@ const applyTheme = (newRole: Role) => {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     const savedUser = localStorage.getItem("flexfit_user");
-    return savedUser ? JSON.parse(savedUser) : null;
+    if (!savedUser) return null;
+    let parsed = JSON.parse(savedUser);
+    if (parsed && !parsed.userId) {
+      const token = localStorage.getItem("access_token");
+      if (token) {
+        try {
+          const payload = parseJwt(token);
+          if (payload?.sub) {
+            parsed = { ...parsed, userId: payload.sub };
+            localStorage.setItem("flexfit_user", JSON.stringify(parsed));
+          }
+        } catch (e) {
+          console.error("Failed to repair user session at init", e);
+        }
+      }
+    }
+    return parsed;
   });
   
   const role = user?.role || null;

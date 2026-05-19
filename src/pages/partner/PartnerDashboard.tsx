@@ -3,7 +3,9 @@ import { Users, DollarSign, Calendar as CalendarIcon, TrendingUp, ChevronRight, 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area } from "recharts";
 import { Button } from "@/components/ui/button";
-
+import { useEffect, useState } from "react";
+import { getAllBranchesApi } from "@/api/branches";
+import type { BranchDto } from "@/api/branches";
 const revenueData = [
   { name: "Tháng 1", total: 4500 },
   { name: "Tháng 2", total: 5200 },
@@ -23,6 +25,23 @@ const attendanceData = [
 ];
 
 export default function PartnerDashboard() {
+  const [branches, setBranches] = useState<BranchDto[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(true);
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const data = await getAllBranchesApi();
+        setBranches(data);
+      } catch (error) {
+        console.error("Lỗi khi tải chi nhánh:", error);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+    fetchBranches();
+  }, []);
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -215,23 +234,23 @@ export default function PartnerDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {[
-                  { name: "FLEXFIT Quận 1", address: "Le Loi, Q1", status: "active", members: 1240 },
-                  { name: "FLEXFIT Quận 2", address: "Thao Dien, Q2", status: "active", members: 850 },
-                  { name: "FLEXFIT Quận 7", address: "Phu My Hung, Q7", status: "maintenance", members: 620 },
-                ].map((gym, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/20">
+                {loadingBranches ? (
+                  <p className="text-muted-foreground text-sm">Đang tải dữ liệu...</p>
+                ) : branches.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">Chưa có chi nhánh nào.</p>
+                ) : branches.map((branch) => (
+                  <div key={branch.branchId} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/20">
                     <div className="flex gap-3 items-center">
-                      <div className={`w-2 h-2 rounded-full ${gym.status === 'active' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500'}`} />
+                      <div className={`w-2 h-2 rounded-full ${branch.isActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500'}`} />
                       <div>
-                        <h4 className="font-semibold text-white text-sm">{gym.name}</h4>
+                        <h4 className="font-semibold text-white text-sm">{branch.branchName}</h4>
                         <div className="flex items-center text-xs text-muted-foreground mt-0.5">
-                          <MapPin className="w-3 h-3 mr-1" /> {gym.address}
+                          <MapPin className="w-3 h-3 mr-1" /> {branch.address}, {branch.district}, {branch.city}
                         </div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-bold text-white">{gym.members}</div>
+                      <div className="text-sm font-bold text-white">0</div>
                       <div className="text-[10px] text-muted-foreground uppercase">Hội viên</div>
                     </div>
                   </div>

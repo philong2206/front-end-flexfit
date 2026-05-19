@@ -1,38 +1,168 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, MapPin, Star, Filter, Calendar, Clock, X, CheckCircle } from "lucide-react";
+import { Search, MapPin, Star, Filter, Calendar, Clock, X, CheckCircle, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { bookGymSessionApi } from "@/api/bookings";
+import { deductCreditsLocally } from "@/api/creditPackages";
+import { getAllBranchesApi } from "@/api/branches";
 
-const MOCK_CLASSES = [
-  { id: 1, name: "HIIT Performance", gym: "FLEXFIT Quận 1", location: "Quận 1, TP.HCM", rating: 4.9, time: "Hôm nay, 18:00", duration: "45 phút", credits: 4, type: "HIIT", image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop" },
-  { id: 2, name: "Vinyasa Flow Yoga", gym: "Zen Studio", location: "Quận 2, TP.HCM", rating: 4.8, time: "Hôm nay, 19:30", duration: "60 phút", credits: 3, type: "Yoga", image: "https://images.unsplash.com/photo-1599901860904-17e6ed7083a0?q=80&w=1470&auto=format&fit=crop" },
-  { id: 3, name: "Heavy Lifting", gym: "PowerHouse Gym", location: "Bình Thạnh, TP.HCM", rating: 4.7, time: "Ngày mai, 17:00", duration: "60 phút", credits: 5, type: "Gym", image: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1470&auto=format&fit=crop" },
-  { id: 4, name: "Spin City", gym: "Velocity", location: "Quận 1, TP.HCM", rating: 4.9, time: "Ngày mai, 07:00", duration: "45 phút", credits: 4, type: "Cardio", image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1470&auto=format&fit=crop" },
-  { id: 5, name: "Pilates Reformer", gym: "Core Balance", location: "Quận 3, TP.HCM", rating: 4.9, time: "Thứ 6, 08:00", duration: "50 phút", credits: 6, type: "Pilates", image: "https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=1470&auto=format&fit=crop" },
-  { id: 6, name: "Boxing Basics", gym: "Iron Paradise", location: "Quận 7, TP.HCM", rating: 4.6, time: "Thứ 6, 18:30", duration: "60 phút", credits: 4, type: "Boxing", image: "https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?q=80&w=1470&auto=format&fit=crop" },
+interface ExploreSession {
+  id: string;
+  name: string;
+  gym: string;
+  branchId: string;
+  location: string;
+  rating: number;
+  time: string;
+  duration: string;
+  credits: number;
+  type: string;
+  image: string;
+}
+
+const SESSION_TEMPLATES = [
+  { name: "HIIT Performance", type: "HIIT", duration: "45 phút", credits: 4, timeOffset: 0, timeHour: "18:00", image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop", rating: 4.9 },
+  { name: "Vinyasa Flow Yoga", type: "Yoga", duration: "60 phút", credits: 3, timeOffset: 0, timeHour: "19:30", image: "https://images.unsplash.com/photo-1599901860904-17e6ed7083a0?q=80&w=1470&auto=format&fit=crop", rating: 4.8 },
+  { name: "Heavy Lifting", type: "Gym", duration: "60 phút", credits: 5, timeOffset: 1, timeHour: "17:00", image: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1470&auto=format&fit=crop", rating: 4.7 },
+  { name: "Spin City", type: "Cardio", duration: "45 phút", credits: 4, timeOffset: 1, timeHour: "07:00", image: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1470&auto=format&fit=crop", rating: 4.9 },
+  { name: "Pilates Reformer", type: "Pilates", duration: "50 phút", credits: 6, timeOffset: 2, timeHour: "08:00", image: "https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=1470&auto=format&fit=crop", rating: 4.9 },
+  { name: "Boxing Basics", type: "Boxing", duration: "60 phút", credits: 4, timeOffset: 2, timeHour: "18:30", image: "https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?q=80&w=1470&auto=format&fit=crop", rating: 4.6 }
 ];
 
 const CATEGORIES = ["Tất cả", "HIIT", "Yoga", "Gym", "Cardio", "Pilates", "Boxing"];
 
 export default function ExplorePage() {
+  const { user } = useAuth();
+  const location = useLocation();
   const [activeCategory, setActiveCategory] = useState("Tất cả");
   const [searchQuery, setSearchQuery] = useState("");
-  const [bookingModal, setBookingModal] = useState<{isOpen: boolean, classData: typeof MOCK_CLASSES[0] | null}>({isOpen: false, classData: null});
+  const [bookingModal, setBookingModal] = useState<{isOpen: boolean, classData: ExploreSession | null}>({isOpen: false, classData: null});
   const [isBooked, setIsBooked] = useState(false);
+  const [isBookingLoading, setIsBookingLoading] = useState(false);
+  const [sessions, setSessions] = useState<ExploreSession[]>([]);
 
-  const filteredClasses = MOCK_CLASSES.filter(c => {
+  useEffect(() => {
+    const loadBranchesAndSessions = async () => {
+      try {
+        const branchList = await getAllBranchesApi();
+        
+        const generated: ExploreSession[] = [];
+        branchList.forEach((branch) => {
+          SESSION_TEMPLATES.forEach((template, index) => {
+            const timeStr = template.timeOffset === 0 
+              ? `Hôm nay, ${template.timeHour}`
+              : template.timeOffset === 1 
+              ? `Ngày mai, ${template.timeHour}`
+              : `Thứ 6, ${template.timeHour}`;
+            
+            generated.push({
+              id: `${branch.branchId}-${index}`,
+              name: template.name,
+              gym: branch.branchName,
+              branchId: branch.branchId,
+              location: `${branch.address}, ${branch.district}, ${branch.city}`,
+              rating: template.rating,
+              time: timeStr,
+              duration: template.duration,
+              credits: template.credits,
+              type: template.type,
+              image: template.image
+            });
+          });
+        });
+        setSessions(generated);
+
+        const state = location.state as { autoSelectName?: string; autoSelectGym?: string } | null;
+        if (state?.autoSelectName) {
+          const matched = generated.find(s => s.name === state.autoSelectName && (!state.autoSelectGym || s.gym === state.autoSelectGym));
+          if (matched) {
+            setBookingModal({ isOpen: true, classData: matched });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load branches and sessions", err);
+      }
+    };
+    loadBranchesAndSessions();
+  }, [location.state]);
+
+  const parseMockTime = (timeStr: string, durationStr: string) => {
+    const now = new Date();
+    const targetDate = new Date(now);
+    
+    if (timeStr.includes("Hôm nay")) {
+      // Keep today
+    } else if (timeStr.includes("Ngày mai")) {
+      targetDate.setDate(now.getDate() + 1);
+    } else {
+      targetDate.setDate(now.getDate() + 1);
+    }
+    
+    const timeMatch = timeStr.match(/(\d{2}):(\d{2})/);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      targetDate.setHours(hours, minutes, 0, 0);
+    } else {
+      targetDate.setHours(18, 0, 0, 0);
+    }
+    
+    let durationMinutes = 60;
+    const durationMatch = durationStr.match(/(\d+)/);
+    if (durationMatch) {
+      durationMinutes = parseInt(durationMatch[1], 10);
+    }
+    
+    const startTimeStr = targetDate.toISOString();
+    const endTimeStr = new Date(targetDate.getTime() + durationMinutes * 60 * 1000).toISOString();
+    
+    return { startTimeStr, endTimeStr };
+  };
+
+  const filteredClasses = sessions.filter(c => {
     const matchesCategory = activeCategory === "Tất cả" || c.type === activeCategory;
     const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.gym.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  const handleBook = () => {
-    setIsBooked(true);
-    setTimeout(() => {
-      setBookingModal({isOpen: false, classData: null});
-      setIsBooked(false);
-    }, 2000);
+  const handleBook = async () => {
+    if (!user?.userId) {
+      alert("Vui lòng đăng nhập với tài khoản Hội viên để thực hiện đặt chỗ.");
+      return;
+    }
+    if (!bookingModal.classData) return;
+
+    try {
+      setIsBookingLoading(true);
+      
+      const { startTimeStr, endTimeStr } = parseMockTime(
+        bookingModal.classData.time,
+        bookingModal.classData.duration
+      );
+
+      await bookGymSessionApi({
+        branchId: bookingModal.classData.branchId,
+        sessionName: bookingModal.classData.name,
+        startTime: startTimeStr,
+        endTime: endTimeStr
+      });
+
+      // Deduct credit locally
+      deductCreditsLocally(user.userId, bookingModal.classData.credits);
+
+      setIsBooked(true);
+      setTimeout(() => {
+        setBookingModal({isOpen: false, classData: null});
+        setIsBooked(false);
+      }, 2000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Đặt lịch thất bại");
+    } finally {
+      setIsBookingLoading(false);
+    }
   };
 
   return (
@@ -155,7 +285,7 @@ export default function ExplorePage() {
           <>
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
               onClick={() => !isBooked && setBookingModal({isOpen: false, classData: null})}
             >
               <motion.div 
@@ -203,11 +333,27 @@ export default function ExplorePage() {
                     </div>
 
                     <div className="flex gap-3">
-                      <Button variant="ghost" className="flex-1 border border-white/10 hover:bg-white/5" onClick={() => setBookingModal({isOpen: false, classData: null})}>
+                      <Button 
+                        variant="ghost" 
+                        className="flex-1 border border-white/10 hover:bg-white/5" 
+                        onClick={() => setBookingModal({isOpen: false, classData: null})}
+                        disabled={isBookingLoading}
+                      >
                         Hủy
                       </Button>
-                      <Button className="flex-1 glow-btn" onClick={handleBook}>
-                        Xác nhận đặt
+                      <Button 
+                        className="flex-1 glow-btn" 
+                        onClick={handleBook}
+                        disabled={isBookingLoading}
+                      >
+                        {isBookingLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Đang đặt...
+                          </>
+                        ) : (
+                          "Xác nhận đặt"
+                        )}
                       </Button>
                     </div>
                   </>
