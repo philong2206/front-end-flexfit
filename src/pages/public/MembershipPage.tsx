@@ -42,7 +42,7 @@ export default function MembershipPage() {
         await Promise.resolve();
         setLoading(true);
         const data = await getPackagesApi();
-        setPackages(data.filter(p => p.isActive).sort((a, b) => a.price - b.price));
+        setPackages(data.filter((p: CreditPackageResponse) => p.isActive).sort((a: CreditPackageResponse, b: CreditPackageResponse) => a.price - b.price));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Có lỗi xảy ra khi tải danh sách gói");
       } finally {

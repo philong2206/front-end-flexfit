@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -6,10 +6,11 @@ import {
   LayoutGrid, CalendarDays, Bell, Search,
   ShoppingCart
 } from "lucide-react";
-import { cn, parseJwt } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import PageTransition from "@/components/layout/PageTransition";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUserCreditWalletApi } from "@/api/creditPackages";
+import { useMemberWalletSnapshot } from "@/hooks/useMemberWalletSnapshot";
+import { useResolvedUserId } from "@/hooks/useResolvedUserId";
 
 const NAV_ITEMS = [
   { label: "Trang chủ", path: "/", icon: Home },
@@ -23,34 +24,9 @@ export function MemberLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
+  const resolvedUserId = useResolvedUserId(user);
+  const { balance, tier: membershipTier } = useMemberWalletSnapshot(resolvedUserId, "en");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [balance, setBalance] = useState<number | null>(null);
-
-  useEffect(() => {
-    const fetchBalance = async () => {
-      let activeUserId = user?.userId;
-      if (!activeUserId) {
-        const token = localStorage.getItem("access_token");
-        if (token) {
-          const payload = parseJwt(token);
-          activeUserId = payload?.sub;
-        }
-      }
-      if (!activeUserId) return;
-      try {
-        const wallet = await getUserCreditWalletApi(activeUserId);
-        setBalance(wallet.balance);
-      } catch (error) {
-        console.error("Failed to fetch balance", error);
-      }
-    };
-
-    fetchBalance();
-
-    const handleUpdate = () => fetchBalance();
-    window.addEventListener("wallet-update", handleUpdate);
-    return () => window.removeEventListener("wallet-update", handleUpdate);
-  }, [user?.userId]);
 
   const handleLogout = () => {
     logout();
@@ -110,7 +86,7 @@ export function MemberLayout() {
                 <span className="text-sm font-bold text-white">
                   {balance !== null ? `${balance} Credits` : "... Credits"}
                 </span>
-                <span className="text-xs text-primary">Pro Member</span>
+                <span className="text-xs text-primary">{membershipTier}</span>
               </div>
               <Link to="/profile">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-orange-400 p-[2px] cursor-pointer hover:scale-105 transition-transform">

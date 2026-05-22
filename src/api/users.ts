@@ -70,3 +70,41 @@ export const deleteUserApi = async (id: string) => {
   }
   return response.json();
 };
+
+export interface UserRoleRequestDto {
+  userId: string;
+  roleName: string;
+}
+
+export const assignRoleApi = async (data: UserRoleRequestDto) => {
+  const token = localStorage.getItem("access_token");
+  const response = await fetch(`${API_URL}/assign-role`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || "Cấp vai trò thất bại");
+  }
+  return response.json();
+};
+
+export const revokeRoleApi = async (userId: string, roleName: string) => {
+  const token = localStorage.getItem("access_token");
+  const response = await fetch(`${API_URL}/revoke-role?userId=${userId}&roleName=${roleName}`, {
+    method: "DELETE",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || "Thu hồi vai trò thất bại");
+  }
+  return response.json();
+};
+

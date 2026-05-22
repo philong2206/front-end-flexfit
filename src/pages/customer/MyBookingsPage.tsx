@@ -6,12 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getMyGymBookingsApi, getMyClassBookingsApi, cancelGymBookingApi, cancelClassBookingApi } from "@/api/bookings";
 import type { BookingResponse } from "@/api/bookings";
-import { useAuth } from "@/contexts/AuthContext";
-import { refundCreditsLocally } from "@/api/creditPackages";
 import { toast } from "sonner";
+import { openGoogleMaps } from "@/lib/mapUtils";
 
 export default function MyBookingsPage() {
-  const { user } = useAuth();
   const [bookings, setBookings] = useState<BookingResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,10 +95,7 @@ export default function MyBookingsPage() {
       } else {
         await cancelGymBookingApi(booking.bookingId);
       }
-      if (user?.userId) {
-        // Refund credits locally
-        refundCreditsLocally(user.userId, booking.creditUsed || 4);
-      }
+      window.dispatchEvent(new Event("wallet-update"));
       toast.success("Hủy lịch thành công!");
       fetchBookings();
     } catch (err) {
@@ -108,17 +103,8 @@ export default function MyBookingsPage() {
     }
   };
 
-  const getBookingCredits = (booking: BookingResponse) => {
-    if (booking.creditUsed && booking.creditUsed > 0) return booking.creditUsed;
-    const name = (booking.className || booking.sessionName || "").toLowerCase();
-    if (name.includes("yoga")) return 3;
-    if (name.includes("hiit")) return 4;
-    if (name.includes("lifting") || name.includes("gym")) return 5;
-    if (name.includes("spin") || name.includes("cardio")) return 4;
-    if (name.includes("pilates")) return 6;
-    if (name.includes("boxing")) return 4;
-    return 4; // Default fallback
-  };
+  const getBookingCredits = (booking: BookingResponse) =>
+    booking.creditUsed !== undefined && booking.creditUsed > 0 ? booking.creditUsed : null;
 
   const [selectedDetailBooking, setSelectedDetailBooking] = useState<BookingResponse | null>(null);
 
@@ -227,7 +213,11 @@ export default function MyBookingsPage() {
                 {selectedDetailBooking.creditUsed !== undefined && (
                   <div className="flex justify-between items-center border-t border-white/5 pt-4">
                     <span className="text-muted-foreground">Phí đặt chỗ</span>
-                    <span className="text-primary font-bold">{getBookingCredits(selectedDetailBooking)} Credits</span>
+                    <span className="text-primary font-bold">
+                      {getBookingCredits(selectedDetailBooking) !== null
+                        ? `${getBookingCredits(selectedDetailBooking)} Credits`
+                        : "Không có dữ liệu"}
+                    </span>
                   </div>
                 )}
               </div>
@@ -248,12 +238,16 @@ export default function MyBookingsPage() {
                 {selectedDetailBooking.status?.toLowerCase() !== "cancelled" && (
                   <Button 
                     className="flex-1 glow-btn"
-                    onClick={() => {
-                      const mapsQuery = selectedDetailBooking.branchName 
-                        ? `${selectedDetailBooking.branchName} TP.HCM` 
-                        : "FlexFit Gym TP.HCM";
-                      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`, '_blank');
-                    }}
+                    onClick={() =>
+                      openGoogleMaps(
+                        {
+                          address: selectedDetailBooking.address,
+                          district: selectedDetailBooking.district,
+                          city: selectedDetailBooking.city,
+                        },
+                        () => toast.error("Không có địa chỉ phòng tập")
+                      )
+                    }
                   >
                     Chỉ đường
                   </Button>

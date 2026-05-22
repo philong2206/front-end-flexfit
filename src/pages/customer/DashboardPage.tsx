@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [completedCount, setCompletedCount] = useState<number>(0);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [balance, setBalance] = useState<number | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [aiRecommendations, setAiRecommendations] = useState<AiRecommendation[]>([]);
 
@@ -39,10 +40,13 @@ export default function DashboardPage() {
       try {
         await Promise.resolve();
         setLoadingBalance(true);
+        setBalanceError(null);
         const wallet = await getUserCreditWalletApi(user.userId);
         setBalance(wallet.balance);
       } catch (error) {
         console.error("Failed to fetch balance", error);
+        setBalance(null);
+        setBalanceError("Không thể tải số credit");
       } finally {
         setLoadingBalance(false);
       }
@@ -168,9 +172,11 @@ export default function DashboardPage() {
               <CreditCard className="h-5 w-5 text-primary" />
             </CardHeader>
             <CardContent className="relative z-10">
-              <div className="text-5xl font-bold text-white">{loadingBalance ? "..." : balance !== null ? balance : 0}</div>
+              <div className="text-5xl font-bold text-white">
+                {loadingBalance ? "..." : balanceError ? "--" : balance !== null ? balance : "--"}
+              </div>
               <div className="flex items-center justify-between mt-2">
-                <p className="text-sm text-primary font-medium">Gia hạn trong 12 ngày tới</p>
+                <p className="text-sm text-primary font-medium">{balanceError || "Gia hạn trong 12 ngày tới"}</p>
                 <Link to="/membership" className="text-xs text-white underline decoration-white/30 hover:decoration-white">Nạp thêm</Link>
               </div>
             </CardContent>

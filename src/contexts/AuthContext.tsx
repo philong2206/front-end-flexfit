@@ -1,7 +1,7 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { parseJwt } from "@/lib/utils";
 
-export type Role = "member" | "partner" | "admin" | null;
+export type Role = "member" | "partner" | "admin" | "staff" | null;
 
 export interface User {
   userId?: string;
@@ -23,14 +23,21 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const applyTheme = (newRole: Role) => {
-  document.documentElement.classList.remove("theme-partner", "theme-admin");
+  document.documentElement.classList.remove("theme-partner", "theme-admin", "theme-staff");
   if (newRole === "partner") document.documentElement.classList.add("theme-partner");
   if (newRole === "admin") document.documentElement.classList.add("theme-admin");
+  if (newRole === "staff") document.documentElement.classList.add("theme-staff");
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
+    const token = localStorage.getItem("access_token");
     const savedUser = localStorage.getItem("flexfit_user");
+    // Avoid "logged in" UI without a token — protected APIs will 401
+    if (savedUser && !token) {
+      localStorage.removeItem("flexfit_user");
+      return null;
+    }
     if (!savedUser) return null;
     let parsed = JSON.parse(savedUser);
     if (parsed && !parsed.userId) {
@@ -58,18 +65,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [role]);
 
-  const login = (newUser: User) => {
+  const login = useCallback((newUser: User) => {
     setUser(newUser);
     localStorage.setItem("flexfit_user", JSON.stringify(newUser));
     applyTheme(newUser.role);
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem("flexfit_user");
     localStorage.removeItem("access_token");
     applyTheme(null);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ role, user, login, logout, isAuthenticated: !!user }}>

@@ -7,20 +7,9 @@ import { useEffect, useState } from "react";
 import { getAllUsersApi } from "@/api/users";
 import { getAllGymsApi, changeGymStatusApi, type GymDto } from "@/api/gyms";
 
-const platformGrowthData = [
-  { name: "T1", users: 4000, partners: 240 },
-  { name: "T2", users: 5000, partners: 290 },
-  { name: "T3", users: 4800, partners: 320 },
-  { name: "T4", users: 6000, partners: 350 },
-  { name: "T5", users: 7500, partners: 400 },
-  { name: "T6", users: 9200, partners: 480 },
-];
-
-const subscriptionData = [
-  { name: "Starter", value: 4500, color: "#8884d8" },
-  { name: "Pro", value: 3200, color: "#82ca9d" },
-  { name: "Elite", value: 1500, color: "#ffc658" },
-];
+// TODO: Backend chưa hỗ trợ API thống kê tăng trưởng và gói thành viên
+const platformGrowthData: Array<{ name: string; users: number }> = [];
+const subscriptionData: Array<{ name: string; value: number; color: string }> = [];
 
 export default function AdminDashboard() {
   const [totalUsers, setTotalUsers] = useState<number>(0);

@@ -96,3 +96,26 @@ export const deleteGymApi = async (id: string) => {
   }
   return response.json();
 };
+
+export interface TransferGymOwnershipDto {
+  gymId: string;
+  newOwnerId: string;
+}
+
+export const transferGymOwnershipApi = async (data: TransferGymOwnershipDto) => {
+  const token = localStorage.getItem("access_token");
+  const response = await fetch(`${API_URL}/transfer-owner`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || "Chuyển nhượng quyền sở hữu thất bại");
+  }
+  return response.json();
+};
+

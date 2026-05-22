@@ -31,13 +31,28 @@ export function parseJwt(token: string) {
   }
 }
 
-export function determineUserRole(email: string): "admin" | "partner" | "member" {
+export function determineUserRole(email: string, payload?: Record<string, unknown>): "admin" | "partner" | "staff" | "member" {
+  // 1. Try to get role from JWT payload first (most reliable)
+  if (payload) {
+    // Check standard role claim
+    const jwtRole = payload["role"] || payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
+    if (jwtRole) {
+      const roleStr = String(jwtRole).toLowerCase();
+      
+      // Map exact DB roles
+      if (roleStr === "admin") return "admin";
+      if (roleStr === "gympartner" || roleStr === "partner") return "partner";
+      if (roleStr === "staff") return "staff";
+      if (roleStr === "member" || roleStr === "user") return "member";
+    }
+  }
+
+  // 2. Fallback to email-based detection (less reliable)
   const lowerEmail = email.toLowerCase();
-  if (lowerEmail.includes("admin")) {
-    return "admin";
-  }
-  if (lowerEmail.includes("partner") || lowerEmail.includes("gym")) {
-    return "partner";
-  }
+  if (lowerEmail.includes("admin")) return "admin";
+  if (lowerEmail.includes("partner") || lowerEmail.includes("gym")) return "partner";
+  if (lowerEmail.includes("staff")) return "staff";
+  
+  // 3. Default to member
   return "member";
 }

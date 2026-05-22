@@ -1,11 +1,18 @@
 import { motion } from "framer-motion";
-import { Users, DollarSign, Calendar as CalendarIcon, TrendingUp, ChevronRight, Activity, MapPin } from "lucide-react";
+import { Users, DollarSign, Calendar as CalendarIcon, TrendingUp, Activity, MapPin, Loader2, Trash2, BookOpen } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area } from "recharts";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { getAllBranchesApi } from "@/api/branches";
 import type { BranchDto } from "@/api/branches";
+import { getAllClassesApi, createClassApi, deleteClassApi } from "@/api/classes";
+import type { ClassDto } from "@/api/classes";
+import { getAllGymsApi } from "@/api/gyms";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+
 const revenueData = [
   { name: "Tháng 1", total: 4500 },
   { name: "Tháng 2", total: 5200 },
@@ -24,23 +31,177 @@ const attendanceData = [
   { time: "21:00", count: 40 },
 ];
 
+// Seeded Categories Mapping in DB
+const CATEGORY_MAPPING = [
+  { name: "Boxing", id: "d210424b-de26-4fb8-afe7-1374f32063dc" },
+  { name: "Crossfit", id: "aa7ff679-6857-4f7c-959f-8cb7fde50e71" },
+  { name: "Dance", id: "ed8f4d96-f264-4962-a7ff-5279f3bf3f3a" },
+  { name: "HIIT", id: "45ad01af-eefe-4a80-bc13-d8ee99cece2b" },
+  { name: "Kickboxing", id: "619e7582-a00e-46bb-b710-f42e472112c6" },
+  { name: "Pilates", id: "19117d26-6a16-4d35-a5fc-6fd029abda08" },
+  { name: "Yoga", id: "f7af0324-45fd-4484-89be-d7b1aacf670a" },
+  { name: "Zumba", id: "7da8aef0-1e51-42dd-9c33-6a1f37ea630d" },
+];
+
 export default function PartnerDashboard() {
+  const { user } = useAuth();
   const [branches, setBranches] = useState<BranchDto[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
 
-  useEffect(() => {
-    const fetchBranches = async () => {
-      try {
-        const data = await getAllBranchesApi();
-        setBranches(data);
-      } catch (error) {
-        console.error("Lỗi khi tải chi nhánh:", error);
-      } finally {
-        setLoadingBranches(false);
+  // Classes States
+  const [classes, setClasses] = useState<ClassDto[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState(true);
+  
+  // Creation States
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  // Form states
+  const [newBranchId, setNewBranchId] = useState("");
+  const [newCategoryId, setNewCategoryId] = useState("");
+  const [newClassName, setNewClassName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newCoachName, setNewCoachName] = useState("");
+  const [newStartDate, setNewStartDate] = useState("");
+  const [newStartTime, setNewStartTime] = useState("");
+  const [newEndDate, setNewEndDate] = useState("");
+  const [newEndTime, setNewEndTime] = useState("");
+  const [newCapacity, setNewCapacity] = useState(20);
+  const [newCreditCost, setNewCreditCost] = useState(4);
+  const [newDifficultyLevel, setNewDifficultyLevel] = useState("Trung bình");
+  const [newCalories, setNewCalories] = useState(500);
+  const [newThumbnailUrl, setNewThumbnailUrl] = useState("");
+
+  const getPartnerBranchesForCurrentUser = async () => {
+    if (!user?.userId) return [];
+    const [gymList, branchList] = await Promise.all([
+      getAllGymsApi(),
+      getAllBranchesApi(),
+    ]);
+    const partnerGymIds = new Set(
+      gymList.filter((gym) => gym.ownerId === user.userId).map((gym) => gym.gymId)
+    );
+    return branchList.filter((branch) => partnerGymIds.has(branch.gymId));
+  };
+
+  const fetchBranches = async () => {
+    try {
+      setLoadingBranches(true);
+      const data = await getPartnerBranchesForCurrentUser();
+      setBranches(data);
+      if (data.length > 0) {
+        setNewBranchId(data[0].branchId);
       }
-    };
+    } catch (error) {
+      console.error("Lỗi khi tải chi nhánh:", error);
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
+
+  const fetchClasses = async () => {
+    try {
+      setLoadingClasses(true);
+      const partnerBranches = branches.length > 0 ? branches : await getPartnerBranchesForCurrentUser();
+      const partnerBranchIds = new Set(partnerBranches.map((branch) => branch.branchId));
+      const data = partnerBranchIds.size > 0
+        ? (await getAllClassesApi()).filter((cls) => partnerBranchIds.has(cls.branchId))
+        : [];
+      // Sort classes by start time ascending
+      const sorted = data.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      setClasses(sorted);
+    } catch (error) {
+      console.error("Lỗi khi tải danh sách lớp học:", error);
+    } finally {
+      setLoadingClasses(false);
+    }
+  };
+
+  useEffect(() => {
     fetchBranches();
-  }, []);
+    fetchClasses();
+    setNewCategoryId(CATEGORY_MAPPING[0].id);
+  }, [user?.userId]);
+
+  const handleDeleteClass = async (classId: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa lớp học này không?")) return;
+    try {
+      await deleteClassApi(classId);
+      toast.success("Xóa lớp học thành công!");
+      fetchClasses();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Xóa lớp học thất bại");
+    }
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBranchId || !newCategoryId || !newClassName || !newStartDate || !newStartTime || !newEndDate || !newEndTime) {
+      toast.error("Vui lòng nhập đầy đủ các trường thông tin bắt buộc.");
+      return;
+    }
+    if (!branches.some((branch) => branch.branchId === newBranchId)) {
+      toast.error("Chi nhánh tạo lớp không thuộc đối tác hiện tại.");
+      return;
+    }
+
+    try {
+      setCreating(true);
+      
+      const startDateTimeStr = `${newStartDate}T${newStartTime}:00`;
+      const endDateTimeStr = `${newEndDate}T${newEndTime}:00`;
+
+      const startDateTime = new Date(startDateTimeStr);
+      const endDateTime = new Date(endDateTimeStr);
+
+      if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+        toast.error("Định dạng thời gian bắt đầu hoặc kết thúc không hợp lệ.");
+        return;
+      }
+
+      if (endDateTime <= startDateTime) {
+        toast.error("Thời gian kết thúc phải sau thời gian bắt đầu.");
+        return;
+      }
+
+      await createClassApi({
+        branchId: newBranchId,
+        categoryId: newCategoryId,
+        className: newClassName,
+        description: newDescription || undefined,
+        coachName: newCoachName || undefined,
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        capacity: Number(newCapacity),
+        creditCost: Number(newCreditCost),
+        difficultyLevel: newDifficultyLevel || undefined,
+        caloriesBurnEstimate: newCalories ? Number(newCalories) : undefined,
+        thumbnailUrl: newThumbnailUrl || undefined
+      });
+
+      toast.success("Tạo lớp học mới thành công!");
+      setShowCreateModal(false);
+      
+      // Reset form
+      setNewClassName("");
+      setNewDescription("");
+      setNewCoachName("");
+      setNewStartDate("");
+      setNewStartTime("");
+      setNewEndDate("");
+      setNewEndTime("");
+      setNewCapacity(20);
+      setNewCreditCost(4);
+      setNewCalories(500);
+      setNewThumbnailUrl("");
+      
+      fetchClasses();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Tạo lớp học thất bại");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="space-y-8 pb-10">
@@ -51,7 +212,9 @@ export default function PartnerDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="border-white/10 glass text-white">Xuất báo cáo</Button>
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Tạo lớp học mới</Button>
+          <Button onClick={() => setShowCreateModal(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            Tạo lớp học mới
+          </Button>
         </div>
       </div>
 
@@ -174,7 +337,6 @@ export default function PartnerDashboard() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-white">Lớp học sắp diễn ra</CardTitle>
-                <Button variant="ghost" className="text-primary hover:text-primary hover:bg-primary/10">Xem tất cả</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -190,35 +352,63 @@ export default function PartnerDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[
-                      { name: "HIIT Performance", trainer: "Nguyen Van A", time: "18:00 - 19:00", capacity: "24/25", status: "Gần đầy" },
-                      { name: "Yoga Vinyasa", trainer: "Tran Thi B", time: "19:30 - 20:30", capacity: "15/20", status: "Mở" },
-                      { name: "Crossfit", trainer: "Le Van C", time: "20:00 - 21:00", capacity: "20/20", status: "Đầy" },
-                      { name: "Zumba Dance", trainer: "Pham Thi D", time: "Ngày mai, 07:00", capacity: "10/30", status: "Mở" },
-                    ].map((cls, i) => (
-                      <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="px-4 py-4 font-medium text-white">{cls.name}</td>
-                        <td className="px-4 py-4">{cls.trainer}</td>
-                        <td className="px-4 py-4">{cls.time}</td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <span>{cls.capacity}</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
-                              cls.status === 'Đầy' ? 'bg-red-500/20 text-red-400' :
-                              cls.status === 'Gần đầy' ? 'bg-amber-500/20 text-amber-400' :
-                              'bg-green-500/20 text-green-400'
-                            }`}>
-                              {cls.status}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
+                    {loadingClasses ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
+                          Đang tải danh sách lớp học...
                         </td>
                       </tr>
-                    ))}
+                    ) : classes.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                          Chưa có lớp học nào được tạo.
+                        </td>
+                      </tr>
+                    ) : classes.map((cls) => {
+                      const start = new Date(cls.startTime);
+                      const end = new Date(cls.endTime);
+                      const dateStr = start.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+                      const timeStr = `${start.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })} - ${end.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+                      
+                      return (
+                        <tr key={cls.classId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-4 py-4 font-medium text-white">
+                            <div>
+                              <div className="font-bold">{cls.className}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5">{cls.branchName}</div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">{cls.coachName || "Chưa có"}</td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-col">
+                              <span className="text-white">{timeStr}</span>
+                              <span className="text-xs text-muted-foreground">{dateStr}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2">
+                              <span>0/{cls.capacity}</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
+                                cls.status === 'Cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
+                              }`}>
+                                {cls.status === 'Cancelled' ? 'Hủy' : 'Hoạt động'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleDeleteClass(cls.classId)}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8 p-0"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -256,13 +446,219 @@ export default function PartnerDashboard() {
                   </div>
                 ))}
               </div>
-              <Button className="w-full mt-6 bg-white/5 hover:bg-white/10 text-white border border-white/10">
-                Thêm chi nhánh mới
-              </Button>
             </CardContent>
           </Card>
         </motion.div>
       </div>
+
+      {/* Create Class Modal Overlay */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={() => !creating && setShowCreateModal(false)}>
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-secondary border border-white/10 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl relative my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-white/5 bg-black/20">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2"><BookOpen className="text-primary w-6 h-6" /> Tạo lớp học mới</h2>
+              <p className="text-muted-foreground text-sm">Điền thông tin chi tiết của lớp học để thêm vào lịch hoạt động.</p>
+            </div>
+            
+            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Tên lớp học *</label>
+                  <Input 
+                    value={newClassName}
+                    onChange={e => setNewClassName(e.target.value)}
+                    placeholder="Ví dụ: HIIT Performance"
+                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Tên HLV *</label>
+                  <Input 
+                    value={newCoachName}
+                    onChange={e => setNewCoachName(e.target.value)}
+                    placeholder="Ví dụ: HLV. Nguyễn Văn A"
+                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Chi nhánh *</label>
+                  <select
+                    value={newBranchId}
+                    onChange={e => setNewBranchId(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-md py-2 px-3 text-white focus:outline-none focus:border-primary text-sm h-10"
+                    required
+                  >
+                    {branches.map(b => (
+                      <option key={b.branchId} value={b.branchId}>{b.branchName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Phân loại môn học *</label>
+                  <select
+                    value={newCategoryId}
+                    onChange={e => setNewCategoryId(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-md py-2 px-3 text-white focus:outline-none focus:border-primary text-sm h-10"
+                    required
+                  >
+                    {CATEGORY_MAPPING.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Thời gian bắt đầu *</label>
+                  <div className="flex gap-2">
+                    <Input 
+                      type="date"
+                      value={newStartDate}
+                      onChange={e => setNewStartDate(e.target.value)}
+                      className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10 [color-scheme:dark]"
+                      required
+                    />
+                    <Input 
+                      type="time"
+                      value={newStartTime}
+                      onChange={e => setNewStartTime(e.target.value)}
+                      className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10 [color-scheme:dark]"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Thời gian kết thúc *</label>
+                  <div className="flex gap-2">
+                    <Input 
+                      type="date"
+                      value={newEndDate}
+                      onChange={e => setNewEndDate(e.target.value)}
+                      className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10 [color-scheme:dark]"
+                      required
+                    />
+                    <Input 
+                      type="time"
+                      value={newEndTime}
+                      onChange={e => setNewEndTime(e.target.value)}
+                      className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10 [color-scheme:dark]"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Sức chứa tối đa (Capacity) *</label>
+                  <Input 
+                    type="number"
+                    value={newCapacity}
+                    onChange={e => setNewCapacity(Number(e.target.value))}
+                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10"
+                    min={1}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Credits yêu cầu *</label>
+                  <Input 
+                    type="number"
+                    value={newCreditCost}
+                    onChange={e => setNewCreditCost(Number(e.target.value))}
+                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10"
+                    min={1}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Độ khó *</label>
+                  <select
+                    value={newDifficultyLevel}
+                    onChange={e => setNewDifficultyLevel(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-md py-2 px-3 text-white focus:outline-none focus:border-primary text-sm h-10"
+                    required
+                  >
+                    <option value="Cơ bản">Cơ bản</option>
+                    <option value="Trung bình">Trung bình</option>
+                    <option value="Nâng cao">Nâng cao</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Calo tiêu hao ước tính</label>
+                  <Input 
+                    type="number"
+                    value={newCalories}
+                    onChange={e => setNewCalories(Number(e.target.value))}
+                    placeholder="Ví dụ: 500"
+                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Đường dẫn ảnh nền (URL)</label>
+                  <Input 
+                    value={newThumbnailUrl}
+                    onChange={e => setNewThumbnailUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Mô tả lớp học</label>
+                <textarea
+                  value={newDescription}
+                  onChange={e => setNewDescription(e.target.value)}
+                  placeholder="Mô tả nội dung bài tập, yêu cầu chuẩn bị..."
+                  rows={3}
+                  className="w-full bg-black/50 border border-white/10 rounded-md py-2 px-3 text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary text-sm focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-white/5 bg-black/20 -mx-6 -mb-6 p-6 justify-end">
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  className="border-white/10 hover:bg-white/5" 
+                  onClick={() => setShowCreateModal(false)}
+                  disabled={creating}
+                >
+                  Hủy
+                </Button>
+                <Button 
+                  type="submit"
+                  className="glow-btn" 
+                  disabled={creating}
+                >
+                  {creating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Đang tạo...
+                    </>
+                  ) : (
+                    "Lưu & Xuất bản"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

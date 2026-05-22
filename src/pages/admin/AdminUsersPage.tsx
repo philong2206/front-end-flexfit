@@ -4,11 +4,26 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { getAllUsersApi, changeUserStatusApi, deleteUserApi } from "@/api/users";
 import type { UserDto } from "@/api/users";
+import { toast } from "sonner";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: "danger" | "warning" | "info";
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info",
+    onConfirm: () => {}
+  });
 
   const fetchUsers = async () => {
     try {
@@ -17,6 +32,7 @@ export default function AdminUsersPage() {
       setUsers(data);
     } catch (error) {
       console.error("Lỗi khi tải danh sách người dùng:", error);
+      toast.error("Không thể tải danh sách người dùng");
     } finally {
       setLoading(false);
     }
@@ -29,24 +45,55 @@ export default function AdminUsersPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleStatusChange = async (id: string, currentStatus: boolean) => {
-    try {
-      await changeUserStatusApi(id, !currentStatus);
-      // Cập nhật state nội bộ
-      setUsers(users.map(u => u.userId === id ? { ...u, isActive: !currentStatus } : u));
-    } catch (error) {
-      console.error("Lỗi khi đổi trạng thái:", error);
-    }
+  const handleStatusChange = (id: string, currentStatus: boolean) => {
+    const user = users.find(u => u.userId === id);
+    if (!user) return;
+
+    const title = currentStatus ? "Tạm khóa người dùng" : "Mở khóa người dùng";
+    const confirmMsg = currentStatus
+      ? `Bạn có chắc chắn muốn TẠM DỪNG (Khóa) hoạt động của tài khoản "${user.fullName}" (${user.email})?`
+      : `Bạn có chắc chắn muốn KÍCH HOẠT hoạt động của tài khoản "${user.fullName}" (${user.email})?`;
+
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message: confirmMsg,
+      type: currentStatus ? "warning" : "info",
+      onConfirm: async () => {
+        try {
+          await changeUserStatusApi(id, !currentStatus);
+          setUsers(users.map(u => u.userId === id ? { ...u, isActive: !currentStatus } : u));
+          toast.success(currentStatus ? "Đã tạm khóa người dùng!" : "Đã mở khóa người dùng thành công!");
+        } catch (error) {
+          console.error("Lỗi khi đổi trạng thái:", error);
+          toast.error("Thay đổi trạng thái thất bại");
+        }
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa người dùng này?")) return;
-    try {
-      await deleteUserApi(id);
-      setUsers(users.filter(u => u.userId !== id));
-    } catch (error) {
-      console.error("Lỗi khi xóa người dùng:", error);
-    }
+  const handleDelete = (id: string) => {
+    const user = users.find(u => u.userId === id);
+    if (!user) return;
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Xóa tài khoản người dùng",
+      message: `Bạn có chắc chắn muốn XÓA VĨNH VIỄN tài khoản "${user.fullName}" (${user.email})? Thao tác này không thể khôi phục!`,
+      type: "danger",
+      onConfirm: async () => {
+        try {
+          await deleteUserApi(id);
+          setUsers(users.filter(u => u.userId !== id));
+          toast.success("Đã xóa tài khoản vĩnh viễn!");
+        } catch (error) {
+          console.error("Lỗi khi xóa người dùng:", error);
+          toast.error("Xóa tài khoản thất bại");
+        }
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const filteredUsers = users.filter(u => 
@@ -159,6 +206,15 @@ export default function AdminUsersPage() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }
