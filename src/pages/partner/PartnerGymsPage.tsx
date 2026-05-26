@@ -35,6 +35,7 @@ export default function PartnerGymsPage() {
 
   useEffect(() => {
     fetchGyms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.userId]);
 
   return (

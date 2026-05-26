@@ -1,78 +1,57 @@
-import { useEffect, useState } from "react";
-import { Tag, Loader2, Plus } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { getPartnerPromotions } from "@/services/partnerApi";
-import { toast } from "sonner";
+import { useEffect, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { getPartnerPromotions } from '@/services/partnerApi';
 
-export default function PartnerPromotionsPage() {
+interface Promotion {
+  promotionId: string;
+  title: string;
+  description?: string;
+  discountPercent?: number;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+}
+
+const Page = () => {
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPromotions = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      await getPartnerPromotions();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Không thể tải danh sách khuyến mãi";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchPromotions();
+    getPartnerPromotions()
+      .then((data) => setPromotions(data))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Khong the tai khuyen mai'))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="space-y-6 pb-10">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Khuyến mãi</h1>
-          <p className="text-muted-foreground text-lg">Quản lý các chương trình khuyến mãi</p>
-        </div>
-        <Button className="bg-primary hover:bg-primary/90">
-          <Plus className="w-4 h-4 mr-2" />
-          Tạo khuyến mãi mới
-        </Button>
-      </div>
-
-      <Card className="bg-secondary border-white/5">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <Tag className="w-5 h-5 text-primary" />
-            Danh sách khuyến mãi
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Khuyen mai</h1>
+      <Card>
+        <CardContent className="p-6">
           {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-                <p className="text-muted-foreground">Đang tải danh sách khuyến mãi...</p>
-              </div>
-            </div>
+            <p className="text-muted-foreground">Dang tai khuyen mai...</p>
           ) : error ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <p className="text-red-400 mb-4">{error}</p>
-                <Button onClick={fetchPromotions} variant="outline">Thử lại</Button>
-              </div>
-            </div>
+            <p className="text-red-400">{error}</p>
+          ) : promotions.length === 0 ? (
+            <p className="text-muted-foreground">Chua co khuyen mai nao.</p>
           ) : (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <Tag className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground mb-2">API endpoint chưa được triển khai</p>
-                <p className="text-xs text-muted-foreground">Backend cần tạo: GET /api/partner/promotions</p>
-              </div>
+            <div className="space-y-3">
+              {promotions.map((promotion) => (
+                <div key={promotion.promotionId} className="rounded-lg border border-white/10 p-4">
+                  <p className="font-semibold text-white">{promotion.title}</p>
+                  <p className="text-sm text-muted-foreground">{promotion.description || 'Khong co mo ta'}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {promotion.discountPercent ?? 0}% - {promotion.isActive ? 'Active' : 'Inactive'}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
       </Card>
     </div>
   );
-}
+};
+
+export default Page;

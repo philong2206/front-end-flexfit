@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { getAllUsersApi } from "@/api/users";
 import { getAllGymsApi, changeGymStatusApi, type GymDto } from "@/api/gyms";
+import { getAdminDashboardApi, type AdminDashboardResponse } from "@/api/adminDashboard";
 
-// TODO: Backend chưa hỗ trợ API thống kê tăng trưởng và gói thành viên
 const platformGrowthData: Array<{ name: string; users: number }> = [];
 const subscriptionData: Array<{ name: string; value: number; color: string }> = [];
 
@@ -15,6 +15,7 @@ export default function AdminDashboard() {
   const [totalUsers, setTotalUsers] = useState<number>(0);
   const [gyms, setGyms] = useState<GymDto[]>([]);
   const [totalPartners, setTotalPartners] = useState<number>(0);
+  const [dashboardStats, setDashboardStats] = useState<AdminDashboardResponse | null>(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -38,9 +39,18 @@ export default function AdminDashboard() {
 
     fetchUsers();
     fetchGyms();
+    getAdminDashboardApi()
+      .then((data) => {
+        setDashboardStats(data);
+        setTotalUsers(data.totalUsers);
+        setTotalPartners(data.totalPartners);
+      })
+      .catch((error) => console.error("Loi khi tai thong ke admin:", error));
   }, []);
 
   const pendingGyms = gyms.filter(g => g.status === 'Pending');
+  const chartGrowthData = dashboardStats?.platformGrowthData?.length ? dashboardStats.platformGrowthData : platformGrowthData;
+  const chartSubscriptionData = dashboardStats?.subscriptionData?.length ? dashboardStats.subscriptionData : subscriptionData;
 
   const handleApprove = async (id: string) => {
     try {
@@ -128,7 +138,7 @@ export default function AdminDashboard() {
               <Activity className="h-4 w-4 text-purple-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">124,500</div>
+              <div className="text-2xl font-bold text-white">{dashboardStats?.totalBookingsLast30Days ?? 0}</div>
               <p className="text-xs text-muted-foreground mt-1">Trong 30 ngày qua</p>
             </CardContent>
           </Card>
@@ -158,7 +168,7 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent className="h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={platformGrowthData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <AreaChart data={chartGrowthData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.8}/>
@@ -189,7 +199,7 @@ export default function AdminDashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={subscriptionData}
+                    data={chartSubscriptionData}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -198,7 +208,7 @@ export default function AdminDashboard() {
                     dataKey="value"
                     stroke="none"
                   >
-                    {subscriptionData.map((entry, index) => (
+                    {chartSubscriptionData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -209,11 +219,11 @@ export default function AdminDashboard() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-                <span className="text-2xl font-bold text-white">9.2k</span>
+                <span className="text-2xl font-bold text-white">{chartSubscriptionData.reduce((sum, item) => sum + item.value, 0)}</span>
                 <span className="block text-[10px] text-muted-foreground uppercase mt-1">Đăng ký</span>
               </div>
               <div className="flex gap-4 mt-4 w-full justify-center">
-                {subscriptionData.map((entry, index) => (
+                {chartSubscriptionData.map((entry, index) => (
                   <div key={index} className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
                     {entry.name}

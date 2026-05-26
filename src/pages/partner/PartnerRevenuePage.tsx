@@ -1,72 +1,52 @@
-import { useEffect, useState } from "react";
-import { DollarSign, Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { getPartnerRevenueReport } from "@/services/partnerApi";
-import { toast } from "sonner";
+import { useEffect, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { getPartnerRevenueReport } from '@/services/partnerApi';
 
-export default function PartnerRevenuePage() {
+interface RevenueReport {
+  totalRevenue: number;
+  revenueByMonth: Array<{ name: string; total: number }>;
+  revenueByBranch: Array<{ name: string; total: number }>;
+  revenueByClass: Array<{ name: string; total: number }>;
+}
+
+const Page = () => {
+  const [report, setReport] = useState<RevenueReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRevenue = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      await getPartnerRevenueReport();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Không thể tải báo cáo doanh thu";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchRevenue();
+    getPartnerRevenueReport()
+      .then((data) => setReport(data))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Khong the tai bao cao doanh thu'))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="space-y-6 pb-10">
-      <div>
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Báo cáo doanh thu</h1>
-        <p className="text-muted-foreground text-lg">Thống kê doanh thu và hiệu suất kinh doanh</p>
-      </div>
-
-      <Card className="bg-secondary border-white/5">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-primary" />
-            Tổng quan doanh thu
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Bao cao doanh thu</h1>
+      <Card>
+        <CardContent className="p-6">
           {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-                <p className="text-muted-foreground">Đang tải báo cáo doanh thu...</p>
-              </div>
-            </div>
+            <p className="text-muted-foreground">Dang tai bao cao doanh thu...</p>
           ) : error ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <p className="text-red-400 mb-4">{error}</p>
-                <Button onClick={fetchRevenue} variant="outline">Thử lại</Button>
+            <p className="text-red-400">{error}</p>
+          ) : report ? (
+            <div className="space-y-4">
+              <div className="text-3xl font-bold text-white">{report.totalRevenue} credits</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {report.revenueByBranch.map((item) => (
+                  <div key={item.name} className="rounded-lg border border-white/10 p-4">
+                    <p className="font-semibold text-white">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">{item.total} credits</p>
+                  </div>
+                ))}
               </div>
             </div>
-          ) : (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <DollarSign className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground mb-2">API endpoint chưa được triển khai</p>
-                <p className="text-xs text-muted-foreground">Backend cần tạo: GET /api/partner/revenue</p>
-              </div>
-            </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
     </div>
   );
-}
+};
+
+export default Page;

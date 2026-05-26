@@ -12,19 +12,15 @@ function getAuthHeaders() {
 }
 
 // ========== DASHBOARD ==========
-// TODO: Backend chưa có endpoint dashboard tổng hợp
-// Cần tạo endpoint: GET /api/partner/dashboard
 export async function getPartnerDashboardStats() {
-  throw new Error("API endpoint chưa được triển khai: GET /api/partner/dashboard");
-  // Expected response:
-  // {
-  //   revenue: number,
-  //   newCustomers: number,
-  //   totalBookings: number,
-  //   occupancyRate: number,
-  //   revenueData: Array<{name: string, total: number}>,
-  //   attendanceData: Array<{time: string, count: number}>
-  // }
+  const response = await fetch(`${API_BASE}/partner/dashboard`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Không thể tải thống kê dashboard");
+  }
+  return response.json();
 }
 
 // ========== GYMS ==========
@@ -157,49 +153,91 @@ export async function getPartnerClassBookings() {
 }
 
 // ========== CUSTOMERS ==========
-// Backend có GET /api/users nhưng trả về tất cả users (không filter theo partner)
-// Cần tạo endpoint riêng: GET /api/partner/customers hoặc GET /api/bookings/partner/customers
 export async function getPartnerCustomers() {
-  throw new Error("Backend chưa hỗ trợ API danh sách khách hàng");
-  // Expected response: Array of customer objects with booking history filtered by partner's gyms
+  const response = await fetch(`${API_BASE}/partner/customers`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Không thể tải danh sách khách hàng");
+  }
+  return response.json();
 }
 
 // ========== REVENUE ==========
-// TODO: Backend chưa có endpoint báo cáo doanh thu
-// Cần tạo endpoint: GET /api/partner/revenue?startDate=&endDate=
-export async function getPartnerRevenueReport(_startDate?: string, _endDate?: string) {
-  throw new Error("API endpoint chưa được triển khai: GET /api/partner/revenue");
-  // Expected response:
-  // {
-  //   totalRevenue: number,
-  //   revenueByMonth: Array<{month: string, amount: number}>,
-  //   revenueByBranch: Array<{branchName: string, amount: number}>,
-  //   revenueByClass: Array<{className: string, amount: number}>
-  // }
+export async function getPartnerRevenueReport(startDate?: string, endDate?: string) {
+  const params = new URLSearchParams();
+  if (startDate) params.set("startDate", startDate);
+  if (endDate) params.set("endDate", endDate);
+  const query = params.toString();
+  const response = await fetch(`${API_BASE}/partner/revenue${query ? `?${query}` : ""}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Không thể tải báo cáo doanh thu");
+  }
+  return response.json();
 }
 
 // ========== PROMOTIONS ==========
-// TODO: Backend chưa có endpoint quản lý khuyến mãi
-// Cần tạo endpoint: GET /api/partner/promotions
 export async function getPartnerPromotions() {
-  throw new Error("API endpoint chưa được triển khai: GET /api/partner/promotions");
+  const response = await fetch(`${API_BASE}/promotions?includeInactive=true`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Không thể tải danh sách khuyến mãi");
+  }
+  return response.json();
 }
 
-export async function createPromotion(_data: unknown) {
-  throw new Error("API endpoint chưa được triển khai: POST /api/partner/promotions");
+export async function createPromotion(data: unknown) {
+  const response = await fetch(`${API_BASE}/promotions`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Không thể tạo khuyến mãi");
+  }
+  return response.json();
 }
 
-export async function updatePromotion(_promotionId: string, _data: unknown) {
-  throw new Error("API endpoint chưa được triển khai: PUT /api/partner/promotions/{id}");
+export async function updatePromotion(promotionId: string, data: unknown) {
+  const response = await fetch(`${API_BASE}/promotions/${promotionId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Không thể cập nhật khuyến mãi");
+  }
+  return response.json();
 }
 
-export async function deletePromotion(_promotionId: string) {
-  throw new Error("API endpoint chưa được triển khai: DELETE /api/partner/promotions/{id}");
+export async function deletePromotion(promotionId: string) {
+  const response = await fetch(`${API_BASE}/promotions/${promotionId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Không thể xóa khuyến mãi");
+  }
+  return response.json();
 }
 
 // ========== REVIEWS ==========
-// TODO: Backend chưa có endpoint quản lý đánh giá
-// Cần tạo endpoint: GET /api/partner/reviews
 export async function getPartnerReviews() {
-  throw new Error("API endpoint chưa được triển khai: GET /api/partner/reviews");
+  const response = await fetch(`${API_BASE}/partner/reviews`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Không thể tải danh sách đánh giá");
+  }
+  return response.json();
 }

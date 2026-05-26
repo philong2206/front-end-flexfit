@@ -18,7 +18,7 @@ export function useMemberProfile(userId: string | undefined, onUnauthorized?: ()
   const [loading, setLoading] = useState(false);
   const [tick, setTick] = useState(0);
   const onUnauthRef = useRef(onUnauthorized);
-  onUnauthRef.current = onUnauthorized;
+  useEffect(() => { onUnauthRef.current = onUnauthorized; }, [onUnauthorized]);
 
   const refetch = useCallback(() => {
     invalidateProfileCache();

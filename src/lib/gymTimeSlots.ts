@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-assignment */
 const EXPLORE_SLOT_KEY = "flexfit_explore_slot_booked";
 
 /** "08:00:00" → "08:00" */

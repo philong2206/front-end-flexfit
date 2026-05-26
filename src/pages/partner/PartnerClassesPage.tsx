@@ -200,7 +200,7 @@ export default function PartnerClassesPage() {
         toast.success("Cập nhật lớp học thành công!");
       }
       setFormDialog({ open: false, mode: "create", classId: null });
-      fetchClasses();
+      fetchClasses();  
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Thao tác thất bại");
     } finally {
@@ -219,7 +219,7 @@ export default function PartnerClassesPage() {
     try {
       await changeClassStatusApi(classId, newStatus);
       toast.success(`Đã ${newStatus === "Open" ? "mở lại" : "hủy"} lớp học`);
-      fetchClasses();
+      fetchClasses();  
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Đổi trạng thái thất bại");
     }
@@ -232,14 +232,14 @@ export default function PartnerClassesPage() {
     try {
       await deleteClassApi(classId);
       toast.success("Xóa lớp học thành công!");
-      fetchClasses();
+      fetchClasses();  
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Xóa lớp học thất bại");
     }
   };
 
   useEffect(() => {
-    fetchClasses();
+    fetchClasses(); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBranch, user?.userId]);
 
   return (

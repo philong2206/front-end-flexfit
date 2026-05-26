@@ -10,26 +10,12 @@ import type { BranchDto } from "@/api/branches";
 import { getAllClassesApi, createClassApi, deleteClassApi } from "@/api/classes";
 import type { ClassDto } from "@/api/classes";
 import { getAllGymsApi } from "@/api/gyms";
+import { getPartnerDashboardStats } from "@/services/partnerApi";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-const revenueData = [
-  { name: "Tháng 1", total: 4500 },
-  { name: "Tháng 2", total: 5200 },
-  { name: "Tháng 3", total: 4800 },
-  { name: "Tháng 4", total: 6100 },
-  { name: "Tháng 5", total: 5900 },
-  { name: "Tháng 6", total: 7200 },
-];
-
-const attendanceData = [
-  { time: "06:00", count: 45 },
-  { time: "09:00", count: 20 },
-  { time: "12:00", count: 15 },
-  { time: "15:00", count: 30 },
-  { time: "18:00", count: 85 },
-  { time: "21:00", count: 40 },
-];
+const revenueData: Array<{ name: string; total: number }> = [];
+const attendanceData: Array<{ time: string; count: number }> = [];
 
 // Seeded Categories Mapping in DB
 const CATEGORY_MAPPING = [
@@ -45,6 +31,14 @@ const CATEGORY_MAPPING = [
 
 export default function PartnerDashboard() {
   const { user } = useAuth();
+  const [dashboardStats, setDashboardStats] = useState<{
+    revenue: number;
+    newCustomers: number;
+    totalBookings: number;
+    occupancyRate: number;
+    revenueData: Array<{ name: string; total: number }>;
+    attendanceData: Array<{ time: string; count: number }>;
+  } | null>(null);
   const [branches, setBranches] = useState<BranchDto[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
 
@@ -58,7 +52,7 @@ export default function PartnerDashboard() {
 
   // Form states
   const [newBranchId, setNewBranchId] = useState("");
-  const [newCategoryId, setNewCategoryId] = useState("");
+  const [newCategoryId, setNewCategoryId] = useState(CATEGORY_MAPPING[0].id);
   const [newClassName, setNewClassName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newCoachName, setNewCoachName] = useState("");
@@ -118,10 +112,16 @@ export default function PartnerDashboard() {
   };
 
   useEffect(() => {
+    getPartnerDashboardStats()
+      .then((data) => setDashboardStats(data))
+      .catch((error) => console.error("Loi khi tai thong ke dashboard:", error));
     fetchBranches();
     fetchClasses();
-    setNewCategoryId(CATEGORY_MAPPING[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.userId]);
+
+  const chartRevenueData = dashboardStats?.revenueData?.length ? dashboardStats.revenueData : revenueData;
+  const chartAttendanceData = dashboardStats?.attendanceData?.length ? dashboardStats.attendanceData : attendanceData;
 
   const handleDeleteClass = async (classId: string) => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa lớp học này không?")) return;
@@ -226,7 +226,7 @@ export default function PartnerDashboard() {
               <DollarSign className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">$24,500</div>
+              <div className="text-2xl font-bold text-white">{dashboardStats?.revenue ?? 0} credits</div>
               <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" /> +12.5% so với tháng trước
               </p>
@@ -241,7 +241,7 @@ export default function PartnerDashboard() {
               <Users className="h-4 w-4 text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">+142</div>
+              <div className="text-2xl font-bold text-white">+{dashboardStats?.newCustomers ?? 0}</div>
               <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" /> +4.1% so với tháng trước
               </p>
@@ -256,7 +256,7 @@ export default function PartnerDashboard() {
               <CalendarIcon className="h-4 w-4 text-purple-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">1,240</div>
+              <div className="text-2xl font-bold text-white">{dashboardStats?.totalBookings ?? 0}</div>
               <p className="text-xs text-muted-foreground mt-1">Trong 30 ngày qua</p>
             </CardContent>
           </Card>
@@ -269,7 +269,7 @@ export default function PartnerDashboard() {
               <Activity className="h-4 w-4 text-amber-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">86%</div>
+              <div className="text-2xl font-bold text-white">{dashboardStats?.occupancyRate ?? 0}%</div>
               <p className="text-xs text-muted-foreground mt-1">Trung bình các lớp học</p>
             </CardContent>
           </Card>
@@ -285,7 +285,7 @@ export default function PartnerDashboard() {
             </CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={chartRevenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                   <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
@@ -309,7 +309,7 @@ export default function PartnerDashboard() {
             </CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={attendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <AreaChart data={chartAttendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>

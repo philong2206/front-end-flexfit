@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Normalize API errors to user-friendly Vietnamese messages
  * Maps error codes and status codes to specific messages

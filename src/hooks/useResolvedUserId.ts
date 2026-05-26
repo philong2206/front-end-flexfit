@@ -10,5 +10,5 @@ export function useResolvedUserId(user: User | null | undefined): string | undef
     if (!t) return undefined;
     const p = parseJwt(t);
     return typeof p?.sub === "string" ? p.sub : undefined;
-  }, [user?.userId]);
+  }, [user]);
 }

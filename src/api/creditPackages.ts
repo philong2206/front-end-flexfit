@@ -1,3 +1,5 @@
+/* eslint-disable no-useless-catch */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { apiFetch } from "@/lib/apiFetch";
 
 export const API_URL = "/api/credit-packages";

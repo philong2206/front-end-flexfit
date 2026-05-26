@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-assignment */
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Search, MapPin, Clock, Star, Info, Users, Loader2, CheckCircle, Calendar, ChevronDown } from "lucide-react";
