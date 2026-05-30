@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Calendar, Clock, MapPin, QrCode, AlertTriangle } from "lucide-react";
+import { Calendar, Clock, MapPin, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,8 @@ import { getMyGymBookingsApi, getMyClassBookingsApi, cancelGymBookingApi, cancel
 import type { BookingResponse } from "@/api/bookings";
 import { toast } from "sonner";
 import { openGoogleMaps } from "@/lib/mapUtils";
+import { getAllBranchesApi, type BranchDto } from "@/api/branches";
+import { QRCodeSVG } from "qrcode.react";
 
 export default function MyBookingsPage() {
   const [bookings, setBookings] = useState<BookingResponse[]>([]);
@@ -15,41 +17,28 @@ export default function MyBookingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"upcoming" | "completed" | "cancelled">("upcoming");
   const [bookingToCancel, setBookingToCancel] = useState<BookingResponse | null>(null);
+  const [branches, setBranches] = useState<BranchDto[]>([]);
 
   const fetchBookings = async () => {
     try {
       await Promise.resolve(); // Defer to avoid synchronous setState in effect
       setLoading(true);
       setError(null);
-      const [gymRes, classRes] = await Promise.all([
+      const [gymRes, classRes, branchesRes] = await Promise.all([
         getMyGymBookingsApi(),
-        getMyClassBookingsApi()
+        getMyClassBookingsApi(),
+        getAllBranchesApi().catch(() => [])
       ]).catch((err) => {
-          throw err;
+        throw err;
       });
-      
-      const ensureUtcString = (dateStr: string) => {
-        if (!dateStr) return dateStr;
-        if (!dateStr.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
-          return `${dateStr}Z`;
-        }
-        return dateStr;
-      };
 
-      const gymBookings = (Array.isArray(gymRes) ? gymRes : (gymRes.data || [])).map((b: BookingResponse) => ({
-        ...b,
-        startTime: ensureUtcString(b.startTime),
-        endTime: ensureUtcString(b.endTime)
-      }));
-      const classBookings = (Array.isArray(classRes) ? classRes : (classRes.data || [])).map((b: BookingResponse) => ({
-        ...b,
-        startTime: ensureUtcString(b.startTime),
-        endTime: ensureUtcString(b.endTime)
-      }));
-      
+      const gymBookings = (Array.isArray(gymRes) ? gymRes : (gymRes.data || []));
+      const classBookings = (Array.isArray(classRes) ? classRes : (classRes.data || []));
+
       const all = [...gymBookings, ...classBookings];
       all.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
       setBookings(all);
+      setBranches(branchesRes || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load bookings");
     } finally {
@@ -65,11 +54,11 @@ export default function MyBookingsPage() {
   }, []);
 
   const now = new Date();
-  
+
   const filteredBookings = bookings.filter(b => {
     const isCancelled = b.status?.toLowerCase() === "cancelled";
     const isPast = new Date(b.endTime) < now;
-    
+
     if (filter === "cancelled") return isCancelled;
     if (filter === "completed") return !isCancelled && isPast;
     if (filter === "upcoming") return !isCancelled && !isPast;
@@ -117,19 +106,19 @@ export default function MyBookingsPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 bg-secondary/50 p-1.5 rounded-xl border border-white/5 w-fit">
-        <button 
+        <button
           onClick={() => setFilter("upcoming")}
           className={`px-5 py-2 rounded-lg font-medium text-sm transition-all ${filter === "upcoming" ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-white"}`}
         >
           Sắp tới
         </button>
-        <button 
+        <button
           onClick={() => setFilter("completed")}
           className={`px-5 py-2 rounded-lg font-medium text-sm transition-all ${filter === "completed" ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-white"}`}
         >
           Đã hoàn thành
         </button>
-        <button 
+        <button
           onClick={() => setFilter("cancelled")}
           className={`px-5 py-2 rounded-lg font-medium text-sm transition-all ${filter === "cancelled" ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-white"}`}
         >
@@ -181,7 +170,7 @@ export default function MyBookingsPage() {
       {/* Detail Booking Modal */}
       {selectedDetailBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSelectedDetailBooking(null)}>
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             onClick={(e) => e.stopPropagation()}
@@ -227,27 +216,66 @@ export default function MyBookingsPage() {
                 <div className="bg-black/30 p-4 rounded-2xl flex flex-col items-center justify-center border border-white/5 mb-6">
                   <p className="text-sm text-muted-foreground mb-3 text-center">Đưa mã QR này cho lễ tân để check-in</p>
                   <div className="bg-white p-3 rounded-xl shadow-lg">
-                    <QrCode className="w-32 h-32 text-black" />
+                    <QRCodeSVG
+                      value={JSON.stringify({
+                        bookingId: selectedDetailBooking.bookingId,
+                        bookingCode: selectedDetailBooking.bookingCode || selectedDetailBooking.bookingId,
+                        type: selectedDetailBooking.classId ? "CLASS" : "GYM"
+                      })}
+                      size={140}
+                    />
                   </div>
-                  <p className="text-xs text-primary mt-3 font-mono">ID: {selectedDetailBooking.bookingCode || "BK12948"}</p>
+                  <p className="text-xs text-primary mt-3 font-mono">ID: {selectedDetailBooking.bookingCode || selectedDetailBooking.bookingId}</p>
                 </div>
               )}
 
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1 border-white/10 text-white hover:bg-white/5" onClick={() => setSelectedDetailBooking(null)}>Đóng</Button>
                 {selectedDetailBooking.status?.toLowerCase() !== "cancelled" && (
-                  <Button 
+                  <Button
                     className="flex-1 glow-btn"
-                    onClick={() =>
-                      openGoogleMaps(
-                        {
-                          address: selectedDetailBooking.address,
-                          district: selectedDetailBooking.district,
-                          city: selectedDetailBooking.city,
-                        },
-                        () => toast.error("Không có địa chỉ phòng tập")
-                      )
-                    }
+                    onClick={() => {
+                      type ExtendedBooking = BookingResponse & { branchId?: string, latitude?: number, longitude?: number };
+                      type ExtendedBranch = BranchDto & { latitude?: number, longitude?: number };
+
+                      const booking = selectedDetailBooking as ExtendedBooking;
+                      const hasBookingAddress = booking.address || booking.district || booking.city || booking.latitude || booking.longitude;
+
+                      if (hasBookingAddress) {
+                        openGoogleMaps(
+                          {
+                            address: booking.address,
+                            district: booking.district,
+                            city: booking.city,
+                            latitude: booking.latitude,
+                            longitude: booking.longitude,
+                          },
+                          () => toast.error("Không có địa chỉ phòng tập")
+                        );
+                      } else {
+                        // Fallback to branch
+                        const branch = branches.find(b =>
+                          booking.branchId
+                            ? b.branchId === booking.branchId
+                            : b.branchName === booking.branchName
+                        ) as ExtendedBranch | undefined;
+
+                        if (branch && (branch.address || branch.district || branch.city || branch.latitude || branch.longitude)) {
+                          openGoogleMaps(
+                            {
+                              address: branch.address,
+                              district: branch.district,
+                              city: branch.city,
+                              latitude: branch.latitude,
+                              longitude: branch.longitude,
+                            },
+                            () => toast.error("Không có địa chỉ phòng tập")
+                          );
+                        } else {
+                          toast.error("Không có địa chỉ phòng tập");
+                        }
+                      }
+                    }}
                   >
                     Chỉ đường
                   </Button>
@@ -261,7 +289,7 @@ export default function MyBookingsPage() {
       {/* Confirm Cancel Modal */}
       {bookingToCancel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setBookingToCancel(null)}>
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             onClick={(e) => e.stopPropagation()}
@@ -270,7 +298,7 @@ export default function MyBookingsPage() {
             <div className="mx-auto w-12 h-12 bg-destructive/15 rounded-full flex items-center justify-center text-destructive">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            
+
             <div className="space-y-2">
               <h3 className="text-xl font-bold text-white">Xác nhận hủy lịch</h3>
               <p className="text-sm text-muted-foreground">
@@ -282,14 +310,14 @@ export default function MyBookingsPage() {
             </div>
 
             <div className="flex gap-3 pt-2">
-              <Button 
-                variant="outline" 
-                className="flex-1 border-white/10 text-white hover:bg-white/5" 
+              <Button
+                variant="outline"
+                className="flex-1 border-white/10 text-white hover:bg-white/5"
                 onClick={() => setBookingToCancel(null)}
               >
                 Giữ lịch
               </Button>
-              <Button 
+              <Button
                 className="flex-1 bg-destructive hover:bg-destructive/90 text-white font-medium"
                 onClick={handleConfirmCancel}
               >

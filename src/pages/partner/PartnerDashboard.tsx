@@ -11,11 +11,11 @@ import { getAllClassesApi, createClassApi, deleteClassApi } from "@/api/classes"
 import type { ClassDto } from "@/api/classes";
 import { getAllGymsApi } from "@/api/gyms";
 import { getPartnerDashboardStats } from "@/services/partnerApi";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-const revenueData: Array<{ name: string; total: number }> = [];
-const attendanceData: Array<{ time: string; count: number }> = [];
+// Removed mock data for revenue and attendance
 
 // Seeded Categories Mapping in DB
 const CATEGORY_MAPPING = [
@@ -39,8 +39,14 @@ export default function PartnerDashboard() {
     revenueData: Array<{ name: string; total: number }>;
     attendanceData: Array<{ time: string; count: number }>;
   } | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  
   const [branches, setBranches] = useState<BranchDto[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
+
+  // Modal State
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, classId: string | null }>({ open: false, classId: null });
+
 
   // Classes States
   const [classes, setClasses] = useState<ClassDto[]>([]);
@@ -113,25 +119,46 @@ export default function PartnerDashboard() {
 
   useEffect(() => {
     getPartnerDashboardStats()
-      .then((data) => setDashboardStats(data))
-      .catch((error) => console.error("Loi khi tai thong ke dashboard:", error));
+      .then((data) => {
+        setDashboardStats(data);
+        setStatsError(null);
+      })
+      .catch((error) => {
+        console.error("Lỗi khi tải thống kê partner:", error);
+        setStatsError(error instanceof Error ? error.message : "Chưa có dữ liệu thống kê từ server");
+        setDashboardStats({
+          revenue: 0,
+          newCustomers: 0,
+          totalBookings: 0,
+          occupancyRate: 0,
+          revenueData: [],
+          attendanceData: []
+        });
+      });
+
     fetchBranches();
     fetchClasses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.userId]);
 
-  const chartRevenueData = dashboardStats?.revenueData?.length ? dashboardStats.revenueData : revenueData;
-  const chartAttendanceData = dashboardStats?.attendanceData?.length ? dashboardStats.attendanceData : attendanceData;
+  const chartRevenueData = dashboardStats?.revenueData || [];
+  const chartAttendanceData = dashboardStats?.attendanceData || [];
 
-  const handleDeleteClass = async (classId: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa lớp học này không?")) return;
+  const confirmDeleteClass = async () => {
+    if (!deleteConfirm.classId) return;
     try {
-      await deleteClassApi(classId);
+      await deleteClassApi(deleteConfirm.classId);
       toast.success("Xóa lớp học thành công!");
       fetchClasses();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Xóa lớp học thất bại");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Lỗi khi xóa lớp học");
+    } finally {
+      setDeleteConfirm({ open: false, classId: null });
     }
+  };
+
+  const handleDeleteClass = (classId: string) => {
+    setDeleteConfirm({ open: true, classId });
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -284,19 +311,25 @@ export default function PartnerDashboard() {
               <CardDescription>Doanh thu tính theo USD trong 6 tháng gần nhất</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartRevenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                  <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                    itemStyle={{ color: 'white' }}
-                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                  />
-                  <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {chartRevenueData.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                  {statsError || "Chưa có dữ liệu doanh thu."}
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartRevenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                    <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                      itemStyle={{ color: 'white' }}
+                      cursor={{fill: 'rgba(255,255,255,0.05)'}}
+                    />
+                    <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -308,24 +341,30 @@ export default function PartnerDashboard() {
               <CardDescription>Lưu lượng khách trung bình theo khung giờ trong ngày</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartAttendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                  <XAxis dataKey="time" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                    itemStyle={{ color: 'white' }}
-                  />
-                  <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorCount)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              {chartAttendanceData.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                  {statsError || "Chưa có dữ liệu mật độ khách."}
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartAttendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                    <XAxis dataKey="time" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                      itemStyle={{ color: 'white' }}
+                    />
+                    <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorCount)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -659,6 +698,17 @@ export default function PartnerDashboard() {
           </motion.div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={deleteConfirm.open}
+        title="Xóa lớp học"
+        message="Bạn có chắc chắn muốn xóa lớp học này? Hành động này không thể hoàn tác và sẽ hủy tất cả các lượt đặt chỗ của hội viên."
+        confirmText="Xóa lớp học"
+        cancelText="Hủy"
+        type="danger"
+        onConfirm={confirmDeleteClass}
+        onCancel={() => setDeleteConfirm({ open: false, classId: null })}
+      />
     </div>
   );
 }

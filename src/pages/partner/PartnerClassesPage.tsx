@@ -21,6 +21,7 @@ import { getAllBranchesApi, type BranchDto } from "@/api/branches";
 import { getAllGymsApi } from "@/api/gyms";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 type ClassStatus = "Open" | "Cancelled" | "Completed";
 
@@ -64,6 +65,10 @@ export default function PartnerClassesPage() {
   });
   const [formData, setFormData] = useState<Partial<CreateClassRequest & UpdateClassRequest>>({});
   const [formLoading, setFormLoading] = useState(false);
+
+  // Delete modal state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, classId: string | null }>({ open: false, classId: null });
+
 
   // Fetch partner-owned branches and classes
   const fetchClasses = async () => {
@@ -225,17 +230,21 @@ export default function PartnerClassesPage() {
     }
   };
 
-  // Delete
-  const handleDelete = async (classId: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa lớp học này?")) return;
-    
+  const confirmDeleteClass = async () => {
+    if (!deleteConfirm.classId) return;
     try {
-      await deleteClassApi(classId);
+      await deleteClassApi(deleteConfirm.classId);
       toast.success("Xóa lớp học thành công!");
-      fetchClasses();  
+      fetchClasses();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Xóa lớp học thất bại");
+      toast.error(err instanceof Error ? err.message : "Không thể xóa lớp học");
+    } finally {
+      setDeleteConfirm({ open: false, classId: null });
     }
+  };
+
+  const handleDeleteClass = (classId: string) => {
+    setDeleteConfirm({ open: true, classId });
   };
 
   useEffect(() => {
@@ -375,7 +384,7 @@ export default function PartnerClassesPage() {
                             <Button 
                               variant="ghost" 
                               size="sm" 
-                              onClick={() => handleDelete(cls.classId)}
+                              onClick={() => handleDeleteClass(cls.classId)}
                               className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8 p-0"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -646,6 +655,18 @@ export default function PartnerClassesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirm.open}
+        title="Xóa lớp học"
+        message="Bạn có chắc chắn muốn xóa lớp học này? Hành động này không thể hoàn tác."
+        confirmText="Xóa lớp học"
+        cancelText="Hủy"
+        type="danger"
+        onConfirm={confirmDeleteClass}
+        onCancel={() => setDeleteConfirm({ open: false, classId: null })}
+      />
     </div>
   );
 }

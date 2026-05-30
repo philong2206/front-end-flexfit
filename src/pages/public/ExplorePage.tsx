@@ -49,6 +49,7 @@ interface ExploreSession {
   city?: string;
   sessionType?: string;
   availableSlots?: number;
+  coachName?: string;
 }
 
 const isOpenGym = (item: ExploreSession) => item.isOpenGym;
@@ -81,10 +82,6 @@ interface SelectedSlot {
   timeHm: string;
   label: string;
 }
-
-const SESSION_TEMPLATES = [
-  { name: "Open Gym Session", type: "Gym", duration: "60 phút", image: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=1470&auto=format&fit=crop", isOpenGym: true },
-];
 
 const ALL_CATEGORY = "Tất cả";
 const CLASS_FALLBACK_IMAGE =
@@ -149,37 +146,31 @@ export default function ExplorePage() {
         const generated: ExploreSession[] = [];
         branchList.forEach((branch) => {
           const openHours = formatOpenHours(branch.openTime, branch.closeTime);
-          SESSION_TEMPLATES.forEach((template) => {
-            const durMatch = template.duration.match(/(\d+)/);
-            const durationMinutes = durMatch ? parseInt(durMatch[1], 10) : 60;
-            const isGym = template.isOpenGym;
-            generated.push({
-              id: `open-gym-${branch.branchId}`,
-              name: template.name,
-              gym: branch.branchName,
-              branchId: branch.branchId,
-              location: `${branch.address}, ${branch.district}, ${branch.city}`,
-              openHours,
-              openTime: branch.openTime,
-              closeTime: branch.closeTime,
-              duration: template.duration,
-              durationMinutes,
-              credits: branch.creditCost,
-              type: template.type,
-              image: template.image,
-              isOpenGym: template.isOpenGym,
-              
-              // Yêu cầu thêm các trường:
-              startTime: undefined,
-              endTime: undefined,
-              categoryName: template.type,
-              branchName: branch.branchName,
-              address: branch.address,
-              district: branch.district,
-              city: branch.city,
-              sessionType: isGym ? "OPEN_GYM" : undefined,
-              availableSlots: isGym ? 15 : undefined,
-            });
+          generated.push({
+            id: `open-gym-${branch.branchId}`,
+            name: `Open Gym - ${branch.branchName}`,
+            gym: branch.branchName,
+            branchId: branch.branchId,
+            location: [branch.address, branch.district, branch.city].filter(Boolean).join(", "),
+            openHours,
+            openTime: branch.openTime,
+            closeTime: branch.closeTime,
+            duration: "60 phút", // Open gym mặc định chia slot 60 phút
+            durationMinutes: 60,
+            credits: branch.creditCost,
+            type: "Gym",
+            image: branch.thumbnailUrl || CLASS_FALLBACK_IMAGE,
+            isOpenGym: true,
+            
+            startTime: undefined,
+            endTime: undefined,
+            categoryName: "Gym",
+            branchName: branch.branchName,
+            address: branch.address,
+            district: branch.district,
+            city: branch.city,
+            sessionType: "OPEN_GYM",
+            availableSlots: 15,
           });
         });
         const realClasses: ExploreSession[] = classList.map((cls) => {
@@ -208,6 +199,7 @@ export default function ExplorePage() {
             address: branch?.address,
             district: branch?.district,
             city: branch?.city,
+            coachName: cls.coachName,
           };
         });
 
@@ -260,6 +252,7 @@ export default function ExplorePage() {
   const handleBook = async () => {
     if (!user?.userId) {
       toast.error("Vui lòng đăng nhập với tài khoản Hội viên để thực hiện đặt chỗ.");
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
     if (!bookingModal.classData) {
@@ -317,37 +310,52 @@ export default function ExplorePage() {
       const classBookings = Array.isArray(classRes) ? classRes : (classRes.data || []);
       const activeBookings = [...gymBookings, ...classBookings].filter(b => b.status?.toLowerCase() !== "cancelled");
 
-      const newStart = new Date(startTimeStr);
-      const newEnd = new Date(endTimeStr);
-
-      const ensureUtcString = (dateStr: string) => {
-        if (!dateStr) return dateStr;
-        if (!dateStr.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
-          return `${dateStr}Z`;
-        }
-        return dateStr;
+      const getDatePart = (dateTime: string) => dateTime.slice(0, 10);
+      const getMinutes = (dateTime: string) => {
+        const time = dateTime.slice(11, 16);
+        const [h, m] = time.split(":").map(Number);
+        return h * 60 + m;
       };
 
-      const hasOverlap = activeBookings.some(booking => {
-        const existStart = new Date(ensureUtcString(booking.startTime));
-        const existEnd = new Date(ensureUtcString(booking.endTime));
-        return newStart < existEnd && existStart < newEnd;
+      const isOverlap = (newStart: number, newEnd: number, oldStart: number, oldEnd: number) => {
+        return newStart < oldEnd && newEnd > oldStart;
+      };
+
+      const hasOverlap = activeBookings.some((booking) => {
+        if (!booking.startTime || !booking.endTime) return false;
+        
+        const sameDate = getDatePart(booking.startTime) === getDatePart(startTimeStr);
+        const activeStatus = !["cancelled", "completed"].includes(
+          booking.status?.toLowerCase() || ""
+        );
+
+        if (!sameDate || !activeStatus) return false;
+
+        return isOverlap(
+          getMinutes(startTimeStr),
+          getMinutes(endTimeStr),
+          getMinutes(booking.startTime),
+          getMinutes(booking.endTime)
+        );
       });
 
       if (hasOverlap) {
-        const errorMsg = "Bạn đã có một lịch đặt chỗ khác trùng ngày, trùng giờ với buổi tập này. Vui lòng chọn khung giờ hoặc buổi tập khác!";
+        const errorMsg = "Bạn đã có lịch đặt trong khung giờ này";
         setBookingError(errorMsg);
         toast.error(errorMsg);
         return;
       }
 
       if (isOpenGym(bookingModal.classData)) {
-        await bookGymSessionApi({
+        // Enforce exact explicit payload
+        const payload = {
           branchId: bookingModal.classData.branchId,
           sessionName: bookingModal.classData.name,
           startTime: startTimeStr,
           endTime: endTimeStr
-        });
+        };
+        console.log("Booking Payload:", JSON.stringify(payload, null, 2));
+        await bookGymSessionApi(payload);
       } else if (bookingModal.classData.classId) {
         await bookClassApi({ classId: bookingModal.classData.classId });
       } else {
@@ -451,6 +459,8 @@ export default function ExplorePage() {
               const timeValue = gym
                 ? `${formatTime(cls.openTime)} - ${formatTime(cls.closeTime)}`
                 : `${formatTime(cls.startTime)} - ${formatTime(cls.endTime)}`;
+              
+              const isPastClass = !gym && cls.startTime ? new Date(cls.startTime) < new Date() : false;
 
               return (
                 <motion.div 
@@ -461,7 +471,16 @@ export default function ExplorePage() {
                   transition={{ duration: 0.3, delay: i * 0.05 }}
                   key={cls.id}
                 >
-                  <Card className="overflow-hidden group hover:border-primary/50 transition-all duration-500 bg-secondary flex flex-col h-full shadow-lg">
+                  <Card className="overflow-hidden group hover:border-primary/50 transition-all duration-500 bg-secondary flex flex-col h-full shadow-lg relative">
+                    {/* PAST CLASS OVERLAY */}
+                    {!gym && isPastClass && (
+                      <div className="absolute inset-0 bg-black/60 z-20 flex items-center justify-center backdrop-blur-[2px]">
+                        <div className="bg-destructive/90 text-destructive-foreground font-bold px-4 py-2 rounded-xl text-lg rotate-[-10deg] border-2 border-destructive shadow-2xl">
+                          Đã hết hạn
+                        </div>
+                      </div>
+                    )}
+
                     <div className="h-48 overflow-hidden relative">
                       <img 
                         src={cls.image || CLASS_FALLBACK_IMAGE} 
@@ -479,37 +498,57 @@ export default function ExplorePage() {
                         </div>
                       )}
                       
-                      <div className="absolute bottom-3 left-3 bg-primary text-primary-foreground font-bold px-3 py-1.5 rounded-full text-xs shadow-lg">
-                        {cls.credits} Credit
+                      <div className="absolute bottom-3 left-3 flex flex-col gap-1">
+                        <div className="bg-primary text-primary-foreground font-bold px-3 py-1.5 rounded-full text-xs shadow-lg w-fit">
+                          {cls.credits !== undefined ? `${cls.credits} Credit` : <span className="text-red-200">Thiếu giá</span>}
+                        </div>
+                        {!gym && cls.coachName && (
+                           <div className="bg-black/60 text-white font-medium px-3 py-1.5 rounded-full text-xs border border-white/10 w-fit backdrop-blur-md">
+                             Coach: {cls.coachName}
+                           </div>
+                        )}
                       </div>
                       <div className="absolute bottom-3 right-3 bg-white/10 backdrop-blur-md text-white font-medium px-3 py-1.5 rounded-full text-xs border border-white/10">
-                        {cls.type}
+                        {cls.categoryName || cls.type}
                       </div>
                     </div>
                     <CardContent className="p-6 flex flex-col flex-1">
                       <div className="mb-4">
                         <h3 className="text-xl font-bold text-white mb-1 leading-tight group-hover:text-primary transition-colors">{cls.name}</h3>
-                        <p className="text-muted-foreground font-medium text-sm">{cls.gym}</p>
+                        <p className="text-muted-foreground font-medium text-sm">{cls.branchName || cls.gym}</p>
                       </div>
                       
                       <div className="space-y-3 mb-6 mt-auto">
-                        <div className="flex items-center text-sm text-gray-300">
-                          <MapPin className="h-4 w-4 mr-3 text-muted-foreground" /> {cls.location}
+                        <div className="flex flex-col gap-1 text-sm text-gray-300">
+                          <div className="flex items-start">
+                            <MapPin className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground shrink-0" /> 
+                            <span className="line-clamp-2">{cls.location}</span>
+                          </div>
                         </div>
+                        {!gym && cls.startTime && (
+                          <div className="flex items-center text-sm text-gray-300">
+                             <Calendar className="h-4 w-4 mr-3 text-muted-foreground shrink-0" />
+                             <span>
+                               {new Date(cls.startTime).toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                             </span>
+                          </div>
+                        )}
                         <div className="flex items-center text-sm text-gray-300">
-                          <Calendar className="h-4 w-4 mr-3 text-muted-foreground shrink-0" />
+                          <Clock className="h-4 w-4 mr-3 text-muted-foreground shrink-0" />
                           <span>{timeLabel}: <span className="text-white">{timeValue}</span></span>
                         </div>
                         <div className="flex items-center text-sm text-gray-300">
-                          <Clock className="h-4 w-4 mr-3 text-muted-foreground" /> {cls.duration}
+                          <Clock className="h-4 w-4 mr-3 text-muted-foreground shrink-0 opacity-0" />
+                          <span className="text-muted-foreground">Thời lượng: <span className="text-gray-300">{cls.duration}</span></span>
                         </div>
                       </div>
 
                       <Button
                         className="w-full glow-btn rounded-xl h-11"
+                        disabled={!gym && isPastClass}
                         onClick={() => openBookingPicker(cls)}
                       >
-                        Đặt chỗ ngay
+                        {!gym && isPastClass ? "Đã hết hạn" : "Đặt chỗ ngay"}
                       </Button>
                     </CardContent>
                   </Card>

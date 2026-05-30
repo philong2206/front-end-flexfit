@@ -137,7 +137,16 @@ export function recordSlotBooking(sessionId: string, dateStr: string, timeHm: st
 export function buildSlotDateTime(dateStr: string, timeHm: string, durationMinutes: number) {
   const [y, mo, d] = dateStr.split("-").map(Number);
   const [h, mi] = timeHm.split(":").map(Number);
-  const start = new Date(y, mo - 1, d, h, mi, 0, 0);
-  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
-  return { startTimeStr: start.toISOString(), endTimeStr: end.toISOString() };
+  
+  const startUtc = new Date(y, mo - 1, d, h, mi, 0, 0);
+  const endUtc = new Date(startUtc.getTime() + durationMinutes * 60 * 1000);
+  
+  // Format as YYYY-MM-DDTHH:mm:ss without Z so C# Backend parses it as local time
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  
+  const formatLocal = (dateObj: Date) => {
+    return `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}T${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}:00`;
+  };
+
+  return { startTimeStr: formatLocal(startUtc), endTimeStr: formatLocal(endUtc) };
 }

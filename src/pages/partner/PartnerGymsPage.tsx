@@ -45,7 +45,7 @@ export default function PartnerGymsPage() {
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Quản lý cơ sở</h1>
           <p className="text-muted-foreground text-lg">Danh sách các phòng tập thuộc quyền quản lý</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90">
+        <Button onClick={() => toast.info("Tính năng thêm cơ sở mới đang được phát triển")} className="bg-primary hover:bg-primary/90">
           <Plus className="w-4 h-4 mr-2" />
           Thêm phòng tập mới
         </Button>
@@ -75,7 +75,7 @@ export default function PartnerGymsPage() {
             <div className="text-center">
               <Building2 className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
               <p className="text-muted-foreground mb-4">Chưa có phòng tập nào</p>
-              <Button className="bg-primary hover:bg-primary/90">
+              <Button onClick={() => toast.info("Tính năng thêm cơ sở mới đang được phát triển")} className="bg-primary hover:bg-primary/90">
                 <Plus className="w-4 h-4 mr-2" />
                 Tạo phòng tập đầu tiên
               </Button>

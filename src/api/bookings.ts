@@ -13,23 +13,37 @@ const getAuthHeaders = () => {
  * Parse error response and throw with proper error data
  */
 async function handleApiError(response: Response, fallbackMessage: string) {
+  let errorData: any;
+  let text = "";
   try {
-    const errorData = await response.json();
-    // Throw the entire error object so normalizeApiError can process it
-    const error: any = new Error(errorData.message || errorData.Message || fallbackMessage);
-    error.response = { status: response.status, data: errorData };
-    error.status = response.status;
-    error.data = errorData;
-    throw error;
-  } catch (e) {
-    if (e instanceof Error && e.message !== fallbackMessage) {
-      throw e;
-    }
-    // If JSON parsing fails, throw with status code
-    const error: any = new Error(fallbackMessage);
-    error.status = response.status;
+    text = await response.text();
+    errorData = text ? JSON.parse(text) : null;
+  } catch {
+    errorData = { message: text };
+  }
+
+  if (response.status === 401) {
+    const error: any = new Error("Vui lòng đăng nhập để đặt chỗ.");
+    error.status = 401;
     throw error;
   }
+
+  let msg = errorData?.message || errorData?.Message || fallbackMessage;
+  
+  if (response.status === 400 && errorData?.errors) {
+    const errorMessages = Object.values(errorData.errors).flat();
+    if (errorMessages.length > 0) {
+      msg = errorMessages.join(", ");
+    }
+  } else if (!errorData?.message && !errorData?.Message && errorData?.title) {
+    msg = errorData.title;
+  }
+
+  const error: any = new Error(msg);
+  error.response = { status: response.status, data: errorData };
+  error.status = response.status;
+  error.data = errorData;
+  throw error;
 }
 
 export interface CreateGymBookingRequest {
@@ -70,7 +84,12 @@ export const bookGymSessionApi = async (data: CreateGymBookingRequest) => {
   const response = await fetch(`${API_URL}/gym`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      branchId: data.branchId,
+      sessionName: data.sessionName,
+      startTime: data.startTime,
+      endTime: data.endTime
+    }),
   });
   if (!response.ok) {
     await handleApiError(response, "Đặt lịch Gym thất bại");

@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { getPartnerPromotions } from '@/services/partnerApi';
+import { ErrorState } from '@/components/ui/error-state';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Tag, Loader2, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Promotion {
   promotionId: string;
@@ -17,33 +21,71 @@ const Page = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchPromotions = () => {
+    setLoading(true);
+    setError(null);
     getPartnerPromotions()
       .then((data) => setPromotions(data))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Khong the tai khuyen mai'))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Không thể tải danh sách khuyến mãi'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchPromotions();
   }, []);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Khuyen mai</h1>
-      <Card>
+    <div className="space-y-6 pb-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Quản lý khuyến mãi</h1>
+          <p className="text-muted-foreground text-lg">Thiết lập các chương trình ưu đãi cho hội viên.</p>
+        </div>
+        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+          <Plus className="w-4 h-4" /> Tạo khuyến mãi mới
+        </Button>
+      </div>
+
+      <Card className="bg-secondary border-white/5">
         <CardContent className="p-6">
           {loading ? (
-            <p className="text-muted-foreground">Dang tai khuyen mai...</p>
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Đang tải dữ liệu khuyến mãi...</p>
+            </div>
           ) : error ? (
-            <p className="text-red-400">{error}</p>
+            <ErrorState 
+              title="Tính năng đang phát triển"
+              message={error}
+              onRetry={fetchPromotions}
+            />
           ) : promotions.length === 0 ? (
-            <p className="text-muted-foreground">Chua co khuyen mai nao.</p>
+            <EmptyState 
+              icon={Tag} 
+              title="Chưa có khuyến mãi"
+              description="Bạn chưa tạo chương trình khuyến mãi nào. Hãy bắt đầu tạo mới để thu hút hội viên."
+              actionLabel="Tạo khuyến mãi đầu tiên"
+              onAction={() => {}}
+            />
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {promotions.map((promotion) => (
-                <div key={promotion.promotionId} className="rounded-lg border border-white/10 p-4">
-                  <p className="font-semibold text-white">{promotion.title}</p>
-                  <p className="text-sm text-muted-foreground">{promotion.description || 'Khong co mo ta'}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {promotion.discountPercent ?? 0}% - {promotion.isActive ? 'Active' : 'Inactive'}
-                  </p>
+                <div key={promotion.promotionId} className="rounded-xl border border-white/5 bg-black/20 p-5 hover:border-primary/30 transition-colors">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="font-bold text-white text-lg">{promotion.title}</p>
+                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md ${
+                      promotion.isActive ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                    }`}>
+                      {promotion.isActive ? 'Hoạt động' : 'Đã ẩn'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{promotion.description || 'Không có mô tả'}</p>
+                  <div className="flex items-center justify-between mt-auto">
+                    <div className="text-sm font-semibold text-primary">{promotion.discountPercent ?? 0}% OFF</div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(promotion.startDate).toLocaleDateString("vi-VN")} - {new Date(promotion.endDate).toLocaleDateString("vi-VN")}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

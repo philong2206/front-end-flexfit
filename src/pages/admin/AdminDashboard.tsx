@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Users, Building2, Activity, ShieldCheck, TrendingUp, AlertTriangle, Download } from "lucide-react";
+import { Users, Building2, Activity, ShieldCheck, TrendingUp, AlertTriangle, Download, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -8,14 +8,13 @@ import { getAllUsersApi } from "@/api/users";
 import { getAllGymsApi, changeGymStatusApi, type GymDto } from "@/api/gyms";
 import { getAdminDashboardApi, type AdminDashboardResponse } from "@/api/adminDashboard";
 
-const platformGrowthData: Array<{ name: string; users: number }> = [];
-const subscriptionData: Array<{ name: string; value: number; color: string }> = [];
-
 export default function AdminDashboard() {
   const [totalUsers, setTotalUsers] = useState<number>(0);
   const [gyms, setGyms] = useState<GymDto[]>([]);
   const [totalPartners, setTotalPartners] = useState<number>(0);
   const [dashboardStats, setDashboardStats] = useState<AdminDashboardResponse | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -39,18 +38,24 @@ export default function AdminDashboard() {
 
     fetchUsers();
     fetchGyms();
+    setLoadingStats(true);
     getAdminDashboardApi()
       .then((data) => {
         setDashboardStats(data);
+        setStatsError(null);
         setTotalUsers(data.totalUsers);
         setTotalPartners(data.totalPartners);
       })
-      .catch((error) => console.error("Loi khi tai thong ke admin:", error));
+      .catch((error) => {
+        console.error("Loi khi tai thong ke admin:", error);
+        setStatsError(error instanceof Error ? error.message : "Chưa có dữ liệu thống kê từ server");
+      })
+      .finally(() => setLoadingStats(false));
   }, []);
 
   const pendingGyms = gyms.filter(g => g.status === 'Pending');
-  const chartGrowthData = dashboardStats?.platformGrowthData?.length ? dashboardStats.platformGrowthData : platformGrowthData;
-  const chartSubscriptionData = dashboardStats?.subscriptionData?.length ? dashboardStats.subscriptionData : subscriptionData;
+  const chartGrowthData = dashboardStats?.platformGrowthData || [];
+  const chartSubscriptionData = dashboardStats?.subscriptionData || [];
 
   const handleApprove = async (id: string) => {
     try {
@@ -70,18 +75,6 @@ export default function AdminDashboard() {
       console.error("Lỗi khi từ chối:", error);
     }
   };
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const users = await getAllUsersApi();
-        setTotalUsers(users.length);
-      } catch (error) {
-        console.error("Lỗi khi tải người dùng:", error);
-      }
-    };
-    fetchUsers();
-  }, []);
 
   return (
     <div className="space-y-8 pb-10">
@@ -167,24 +160,34 @@ export default function AdminDashboard() {
               <CardDescription>Số lượng người dùng và đối tác tham gia nền tảng</CardDescription>
             </CardHeader>
             <CardContent className="h-[350px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartGrowthData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#60a5fa" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                  <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                    itemStyle={{ color: 'white' }}
-                  />
-                  <Area type="monotone" dataKey="users" name="Người dùng" stroke="#60a5fa" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              {loadingStats ? (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+                </div>
+              ) : chartGrowthData.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                  {statsError || "Chưa có dữ liệu tăng trưởng."}
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartGrowthData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#60a5fa" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                    <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                      itemStyle={{ color: 'white' }}
+                    />
+                    <Area type="monotone" dataKey="users" name="Người dùng" stroke="#60a5fa" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </motion.div>

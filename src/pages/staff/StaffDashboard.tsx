@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,81 +12,72 @@ import {
   Search, 
   CheckSquare, 
   AlertCircle,
-  PlayCircle
+  PlayCircle,
+  Loader2
 } from "lucide-react";
 import { toast } from "sonner";
-
-interface MockBooking {
-  code: string;
-  name: string;
-  avatar: string;
-  email: string;
-  phone: string;
-  level: string;
-  type: "Class" | "Gym";
-  targetName: string;
-  instructor?: string;
-  time: string;
-  checkedIn: boolean;
-}
-
-const MOCK_BOOKINGS: MockBooking[] = [
-  {
-    code: "FF-4829",
-    name: "Nguyễn Văn An",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
-    email: "an.nguyen@example.com",
-    phone: "0901 234 567",
-    level: "Elite Member",
-    type: "Class",
-    targetName: "Hatha Yoga Cơ Bản",
-    instructor: "HLV Thùy Linh",
-    time: "18:00 - 19:00",
-    checkedIn: false
-  },
-  {
-    code: "FF-8371",
-    name: "Trần Thị Bích",
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=256&auto=format&fit=crop",
-    email: "bich.tran@example.com",
-    phone: "0987 654 321",
-    level: "Pro Member",
-    type: "Class",
-    targetName: "Power Pilates",
-    instructor: "HLV Minh Tuấn",
-    time: "19:15 - 20:15",
-    checkedIn: false
-  },
-  {
-    code: "FF-1122",
-    name: "Lê Hoàng Nam",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
-    email: "nam.le@example.com",
-    phone: "0912 345 678",
-    level: "Starter Member",
-    type: "Gym",
-    targetName: "Tập Tự Do - Chi nhánh Quận 1",
-    time: "Cả ngày",
-    checkedIn: false
-  }
-];
+import {
+  getStaffDashboardStats,
+  searchBookingByCode,
+  confirmCheckIn,
+  getRecentCheckIns,
+  getTodayClasses,
+  type StaffDashboardStats,
+  type BookingSearchResult,
+  type CheckInFeedItem,
+  type TodayClass
+} from "@/services/staffApi";
+import { ErrorState } from "@/components/ui/error-state";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function StaffDashboard() {
   const { user } = useAuth();
   const [searchCode, setSearchCode] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [activeBooking, setActiveBooking] = useState<MockBooking | null>(null);
-  const [bookingsList, setBookingsList] = useState<MockBooking[]>(MOCK_BOOKINGS);
-  const [recentCheckIns, setRecentCheckIns] = useState<Array<{ name: string, type: string, time: string, code: string }>>([
-    { name: "Phạm Minh Hoàng", type: "Tập Tự Do", time: "16:25", code: "FF-9021" },
-    { name: "Đặng Hồng Nhung", type: "Zumba Dance", time: "16:10", code: "FF-3118" },
-    { name: "Vũ Quốc Anh", type: "Kickboxing", time: "15:45", code: "FF-5527" },
-  ]);
+  const [activeBooking, setActiveBooking] = useState<BookingSearchResult | null>(null);
+
+  const [stats, setStats] = useState<StaffDashboardStats | null>(null);
+  const [recentCheckIns, setRecentCheckIns] = useState<CheckInFeedItem[]>([]);
+  const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
+  
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Chào buổi sáng" : hour < 18 ? "Chào buổi chiều" : "Chào buổi tối";
 
-  const handleSearch = (e: React.FormEvent) => {
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      // Run API calls in parallel
+      const [statsData, checkinsData, classesData] = await Promise.all([
+        getStaffDashboardStats().catch(err => { console.warn(err); return null; }),
+        getRecentCheckIns().catch(err => { console.warn(err); return []; }),
+        getTodayClasses().catch(err => { console.warn(err); return []; })
+      ]);
+      
+      // If the main stats call fails, we can assume the endpoints don't exist yet
+      if (!statsData) {
+        throw new Error("API thống kê nhân viên hiện chưa được triển khai trên Backend (Missing endpoint).");
+      }
+      
+      setStats(statsData);
+      setRecentCheckIns(checkinsData);
+      setTodayClasses(classesData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Đã xảy ra lỗi khi tải dữ liệu");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchCode.trim()) {
       toast.error("Vui lòng nhập mã đặt chỗ / check-in");
@@ -96,48 +87,54 @@ export default function StaffDashboard() {
     setIsSearching(true);
     setActiveBooking(null);
 
-    setTimeout(() => {
-      const match = bookingsList.find(b => b.code.toLowerCase() === searchCode.trim().toLowerCase());
-      setIsSearching(false);
-
-      if (match) {
-        if (match.checkedIn) {
-          toast.info("Mã đặt chỗ này đã được check-in trước đó!");
-        }
-        setActiveBooking(match);
-        toast.success("Đã tìm thấy thông tin đặt chỗ!");
-      } else {
-        toast.error("Không tìm thấy thông tin đặt chỗ với mã này. Vui lòng kiểm tra lại.");
+    try {
+      const match = await searchBookingByCode(searchCode.trim());
+      if (match.checkedIn) {
+        toast.info("Mã đặt chỗ này đã được check-in trước đó!");
       }
-    }, 800);
-  };
-
-  const handleConfirmCheckin = (code: string) => {
-    setBookingsList(prev => 
-      prev.map(b => b.code === code ? { ...b, checkedIn: true } : b)
-    );
-    
-    const matched = bookingsList.find(b => b.code === code);
-    if (matched) {
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      
-      setRecentCheckIns(prev => [
-        {
-          name: matched.name,
-          type: matched.type === "Gym" ? "Tập Tự Do" : matched.targetName,
-          time: timeStr,
-          code: matched.code
-        },
-        ...prev
-      ]);
-      
-      toast.success(`Check-in thành công cho hội viên ${matched.name}!`);
+      setActiveBooking(match);
+      toast.success("Đã tìm thấy thông tin đặt chỗ!");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không tìm thấy thông tin đặt chỗ");
+    } finally {
+      setIsSearching(false);
     }
-
-    setActiveBooking(null);
-    setSearchCode("");
   };
+
+  const handleConfirmCheckin = async (code: string) => {
+    setIsCheckingIn(true);
+    try {
+      await confirmCheckIn(code);
+      toast.success(`Check-in thành công!`);
+      setActiveBooking(null);
+      setSearchCode("");
+      // Refetch data
+      fetchDashboardData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Check-in thất bại");
+    } finally {
+      setIsCheckingIn(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <ErrorState 
+        title="Tính năng đang phát triển"
+        message={error}
+        onRetry={fetchDashboardData}
+        retryLabel="Thử lại"
+      />
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10">
@@ -151,7 +148,7 @@ export default function StaffDashboard() {
         </div>
         <div className="flex items-center gap-2 bg-secondary border border-white/5 px-4 py-2 rounded-2xl">
           <Clock className="w-4 h-4 text-primary animate-pulse" />
-          <span className="text-sm font-semibold text-white">Ca làm việc: Chiều (13:00 - 21:00)</span>
+          <span className="text-sm font-semibold text-white">Ca làm việc: Hiện tại</span>
         </div>
       </div>
 
@@ -164,10 +161,7 @@ export default function StaffDashboard() {
                 <span className="text-sm font-medium text-muted-foreground">Lượt Check-in hôm nay</span>
                 <CheckSquare className="h-5 w-5 text-emerald-400" />
               </div>
-              <div className="text-3xl font-bold text-white">51 lượt</div>
-              <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1">
-                +14% so với hôm qua
-              </p>
+              <div className="text-3xl font-bold text-white">{stats?.todayCheckIns ?? 0} lượt</div>
             </CardContent>
           </Card>
         </motion.div>
@@ -179,8 +173,7 @@ export default function StaffDashboard() {
                 <span className="text-sm font-medium text-muted-foreground">Hội viên trong phòng</span>
                 <Users className="h-5 w-5 text-sky-400" />
               </div>
-              <div className="text-3xl font-bold text-white">18 người</div>
-              <p className="text-xs text-muted-foreground mt-2">Đỉnh điểm hôm nay: 32</p>
+              <div className="text-3xl font-bold text-white">{stats?.membersInGym ?? 0} người</div>
             </CardContent>
           </Card>
         </motion.div>
@@ -192,8 +185,7 @@ export default function StaffDashboard() {
                 <span className="text-sm font-medium text-muted-foreground">Lớp học tối nay</span>
                 <Calendar className="h-5 w-5 text-purple-400" />
               </div>
-              <div className="text-3xl font-bold text-white">6 lớp</div>
-              <p className="text-xs text-muted-foreground mt-2">Lớp tiếp theo: Yoga (18:00)</p>
+              <div className="text-3xl font-bold text-white">{stats?.classesTonight ?? 0} lớp</div>
             </CardContent>
           </Card>
         </motion.div>
@@ -205,8 +197,7 @@ export default function StaffDashboard() {
                 <span className="text-sm font-medium text-muted-foreground">Yêu cầu hỗ trợ</span>
                 <AlertCircle className="h-5 w-5 text-amber-400" />
               </div>
-              <div className="text-3xl font-bold text-white">2 yêu cầu</div>
-              <p className="text-xs text-amber-400 mt-2">Cần xử lý gấp</p>
+              <div className="text-3xl font-bold text-white">{stats?.supportRequests ?? 0} yêu cầu</div>
             </CardContent>
           </Card>
         </motion.div>
@@ -241,7 +232,7 @@ export default function StaffDashboard() {
                   disabled={isSearching} 
                   className="bg-primary text-primary-foreground hover:bg-primary/95 px-6 rounded-xl font-medium shrink-0"
                 >
-                  {isSearching ? "Đang tìm..." : "Kiểm tra"}
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Kiểm tra"}
                 </Button>
               </form>
 
@@ -256,11 +247,17 @@ export default function StaffDashboard() {
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
                       <div className="flex items-center gap-3">
-                        <img 
-                          src={activeBooking.avatar} 
-                          alt={activeBooking.name}
-                          className="w-14 h-14 rounded-2xl object-cover border border-white/10"
-                        />
+                        {activeBooking.avatar ? (
+                          <img 
+                            src={activeBooking.avatar} 
+                            alt={activeBooking.name}
+                            className="w-14 h-14 rounded-2xl object-cover border border-white/10"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white font-bold text-xl">
+                            {activeBooking.name.charAt(0)}
+                          </div>
+                        )}
                         <div>
                           <h4 className="font-bold text-white text-base">{activeBooking.name}</h4>
                           <p className="text-xs text-muted-foreground">{activeBooking.email} | {activeBooking.phone}</p>
@@ -301,14 +298,17 @@ export default function StaffDashboard() {
                         variant="ghost" 
                         onClick={() => setActiveBooking(null)}
                         className="text-muted-foreground hover:text-white rounded-xl hover:bg-white/5"
+                        disabled={isCheckingIn}
                       >
                         Hủy bỏ
                       </Button>
                       <Button
                         onClick={() => handleConfirmCheckin(activeBooking.code)}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                        disabled={activeBooking.checkedIn || isCheckingIn}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50"
                       >
-                        <CheckCircle className="w-4 h-4" /> Xác nhận Check-in
+                        {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                        {activeBooking.checkedIn ? "Đã Check-in" : "Xác nhận Check-in"}
                       </Button>
                     </div>
                   </motion.div>
@@ -329,57 +329,43 @@ export default function StaffDashboard() {
               </span>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-muted-foreground">
-                  <thead className="text-xs uppercase bg-black/20 text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3 rounded-l-lg font-medium">Giờ học</th>
-                      <th className="px-4 py-3 font-medium">Tên lớp</th>
-                      <th className="px-4 py-3 font-medium">HLV</th>
-                      <th className="px-4 py-3 font-medium">Hội viên</th>
-                      <th className="px-4 py-3 rounded-r-lg font-medium text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-4 font-semibold text-white">18:00 - 19:00</td>
-                      <td className="px-4 py-4">
-                        <span className="font-medium text-white block">Hatha Yoga Cơ Bản</span>
-                        <span className="text-xs text-muted-foreground">Phòng Studio A</span>
-                      </td>
-                      <td className="px-4 py-4">Thùy Linh</td>
-                      <td className="px-4 py-4">12 / 15</td>
-                      <td className="px-4 py-4 text-right">
-                        <Button size="sm" variant="outline" className="h-8 border-white/10 text-white text-xs hover:bg-emerald-500/10 hover:text-emerald-400">Điểm danh</Button>
-                      </td>
-                    </tr>
-                    <tr className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-4 font-semibold text-white">19:15 - 20:15</td>
-                      <td className="px-4 py-4">
-                        <span className="font-medium text-white block">Power Pilates</span>
-                        <span className="text-xs text-muted-foreground">Phòng Studio B</span>
-                      </td>
-                      <td className="px-4 py-4">Minh Tuấn</td>
-                      <td className="px-4 py-4">8 / 12</td>
-                      <td className="px-4 py-4 text-right">
-                        <Button size="sm" variant="outline" className="h-8 border-white/10 text-white text-xs hover:bg-emerald-500/10 hover:text-emerald-400">Điểm danh</Button>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-4 font-semibold text-white">20:30 - 21:30</td>
-                      <td className="px-4 py-4">
-                        <span className="font-medium text-white block">Zumba Fitness</span>
-                        <span className="text-xs text-muted-foreground">Phòng Studio A</span>
-                      </td>
-                      <td className="px-4 py-4">Hoài Thương</td>
-                      <td className="px-4 py-4">16 / 20</td>
-                      <td className="px-4 py-4 text-right">
-                        <Button size="sm" variant="outline" className="h-8 border-white/10 text-white text-xs hover:bg-emerald-500/10 hover:text-emerald-400">Điểm danh</Button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              {todayClasses.length === 0 ? (
+                <EmptyState 
+                  icon={Calendar} 
+                  title="Không có lớp học" 
+                  description="Hiện tại không có lớp học nào được lên lịch cho hôm nay." 
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-muted-foreground">
+                    <thead className="text-xs uppercase bg-black/20 text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3 rounded-l-lg font-medium">Giờ học</th>
+                        <th className="px-4 py-3 font-medium">Tên lớp</th>
+                        <th className="px-4 py-3 font-medium">HLV</th>
+                        <th className="px-4 py-3 font-medium">Hội viên</th>
+                        <th className="px-4 py-3 rounded-r-lg font-medium text-right">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {todayClasses.map((cls, idx) => (
+                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="px-4 py-4 font-semibold text-white">{cls.time || (cls.startTime ? new Date(cls.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A')}</td>
+                          <td className="px-4 py-4">
+                            <span className="font-medium text-white block">{cls.className}</span>
+                            <span className="text-xs text-muted-foreground">{cls.room || "Studio"}</span>
+                          </td>
+                          <td className="px-4 py-4">{cls.coachName || cls.instructorName || "Chưa xếp"}</td>
+                          <td className="px-4 py-4">{cls.bookedCount ?? cls.enrolled ?? 0} / {cls.capacity || 0}</td>
+                          <td className="px-4 py-4 text-right">
+                            <Button size="sm" variant="outline" className="h-8 border-white/10 text-white text-xs hover:bg-emerald-500/10 hover:text-emerald-400">Điểm danh</Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -393,24 +379,28 @@ export default function StaffDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentCheckIns.map((checkin, idx) => (
-                  <div key={idx} className="flex items-start justify-between p-3.5 bg-black/20 rounded-xl hover:bg-black/30 transition-all">
-                    <div className="flex gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/10">
-                        <CheckSquare className="w-5 h-5" />
+                {recentCheckIns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Chưa có lượt check-in nào.</p>
+                ) : (
+                  recentCheckIns.map((checkin, idx) => (
+                    <div key={idx} className="flex items-start justify-between p-3.5 bg-black/20 rounded-xl hover:bg-black/30 transition-all">
+                      <div className="flex gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/10">
+                          <CheckSquare className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h5 className="text-sm font-semibold text-white leading-none mb-1">{checkin.name}</h5>
+                          <p className="text-xs text-muted-foreground">{checkin.type}</p>
+                          <span className="text-[10px] text-muted-foreground font-mono">{checkin.code}</span>
+                        </div>
                       </div>
-                      <div>
-                        <h5 className="text-sm font-semibold text-white leading-none mb-1">{checkin.name}</h5>
-                        <p className="text-xs text-muted-foreground">{checkin.type}</p>
-                        <span className="text-[10px] text-muted-foreground font-mono">{checkin.code}</span>
+                      <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        {checkin.time}
                       </div>
                     </div>
-                    <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      {checkin.time}
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
