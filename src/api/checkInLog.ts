@@ -16,6 +16,16 @@ export interface CheckInLogDto {
   type: string; // "Gym" or "Class"
   className?: string;
   status: string;
+  
+  // Optional fallback fields for frontend compatibility
+  customerName?: string;
+  userFullName?: string;
+  bookingType?: string;
+  gymName?: string;
+  sessionName?: string;
+  name?: string;
+  checkInAt?: string;
+  scannedAt?: string;
 }
 
 export interface CheckInGymRequest {

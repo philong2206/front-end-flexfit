@@ -370,8 +370,8 @@ export default function StaffCheckInPage() {
     const isCheckedIn = bookingDetail.checkInStatus === "CheckedIn" || bookingDetail.checkInStatus === "Đã check-in";
     const isCancelled = bookingDetail.status === "Cancelled";
 
-    let badgeText = "Hợp lệ";
-    let badgeColor = "bg-emerald-500/20 text-emerald-400";
+    let badgeText: string;
+    let badgeColor: string;
     let statusMessage = "";
 
     if (isCancelled) {
@@ -645,8 +645,8 @@ export default function StaffCheckInPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-white/5">
-                  {recentCheckIns.map(log => (
-                    <div key={log.checkInId || Math.random().toString()} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors">
+                    {recentCheckIns.map((log, idx) => (
+                      <div key={log.checkInId ?? idx} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors">
                       <div className="flex gap-3">
                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${log.status === 'Success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
                            {log.status === 'Success' ? <CheckCircle className="w-5 h-5" /> : <X className="w-5 h-5" />}

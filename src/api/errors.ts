@@ -5,3 +5,10 @@ export class ApiUnauthorizedError extends Error {
     this.name = "ApiUnauthorizedError";
   }
 }
+export class ApiError extends Error {
+  status?: number;
+  constructor(message = "API error") {
+    super(message);
+    this.name = "ApiError";
+  }
+}

@@ -11,6 +11,7 @@ import PageTransition from "@/components/layout/PageTransition";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMemberWalletSnapshot } from "@/hooks/useMemberWalletSnapshot";
 import { useResolvedUserId } from "@/hooks/useResolvedUserId";
+import { AiChatBot } from "@/components/ai/AiChatBot";
 
 const NAV_ITEMS = [
   { label: "Trang chủ", path: "/", icon: Home },
@@ -167,6 +168,8 @@ export function MemberLayout() {
           </PageTransition>
         </div>
       </main>
+
+      <AiChatBot />
 
       {/* Footer */}
       <footer className="border-t border-white/5 bg-secondary pt-12 pb-8 mt-auto">
