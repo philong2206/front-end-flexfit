@@ -23,12 +23,26 @@ function traceLabel(method: string | undefined, url: string): string {
 }
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const url =
+  let urlStr =
     typeof input === "string"
       ? input
       : input instanceof URL
         ? input.href
         : input.url;
+
+  const baseUrl = import.meta.env.VITE_API_BASE_URL;
+  if (baseUrl && urlStr.startsWith("/")) {
+    if (baseUrl.endsWith("/api") && urlStr.startsWith("/api")) {
+      urlStr = baseUrl.replace(/\/api$/, "") + urlStr;
+    } else {
+      urlStr = baseUrl.replace(/\/$/, "") + urlStr;
+    }
+  }
+
+  const url = typeof input === "object" && 'url' in input ? input.url : urlStr;
+  const inputForFetch = typeof input === "object" && 'url' in input 
+    ? new Request(urlStr, input as RequestInit) 
+    : urlStr;
 
   const method = init?.method;
   const label = traceLabel(method, url);
@@ -41,7 +55,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   }
 
   try {
-    return await fetch(input, { ...init, headers: merged });
+    return await fetch(inputForFetch, { ...init, headers: merged });
   } finally {
     if (trace) console.timeEnd(label);
   }

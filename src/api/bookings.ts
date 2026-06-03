@@ -174,3 +174,25 @@ export const getPartnerClassBookingsApi = async () => {
   }
   return response.json();
 };
+
+export const getPartnerGymBookingTabsApi = async () => {
+  const response = await fetch(`/api/partner-bookings/gym/tabs`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    await handleApiError(response, "Lấy danh sách đặt lịch Gym thất bại");
+  }
+  return response.json();
+};
+
+export const getPartnerClassBookingTabsApi = async () => {
+  const response = await fetch(`/api/partner-bookings/class/tabs`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    await handleApiError(response, "Lấy danh sách đặt lịch Lớp học thất bại");
+  }
+  return response.json();
+};

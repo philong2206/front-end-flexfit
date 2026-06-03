@@ -53,6 +53,11 @@ import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
 
 // Staff Pages
 import StaffDashboard from "@/pages/staff/StaffDashboard";
+import StaffCheckInPage from "@/pages/staff/StaffCheckInPage";
+import StaffSchedulePage from "@/pages/staff/StaffSchedulePage";
+import StaffCustomersPage from "@/pages/staff/StaffCustomersPage";
+import StaffSupportPage from "@/pages/staff/StaffSupportPage";
+import StaffSettingsPage from "@/pages/staff/StaffSettingsPage";
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) {
   const { role, isAuthenticated, logout } = useAuth();
@@ -137,11 +142,11 @@ function AnimatedRoutes() {
         {/* Staff Routes */}
         <Route element={<ProtectedRoute allowedRoles={["staff"]}><StaffLayout /></ProtectedRoute>}>
           <Route path="/staff" element={<StaffDashboard />} />
-          <Route path="/staff/checkin" element={<StaffDashboard />} />
-          <Route path="/staff/schedule" element={<StaffDashboard />} />
-          <Route path="/staff/customers" element={<StaffDashboard />} />
-          <Route path="/staff/support" element={<StaffDashboard />} />
-          <Route path="/staff/settings" element={<StaffDashboard />} />
+          <Route path="/staff/checkin" element={<StaffCheckInPage />} />
+          <Route path="/staff/schedule" element={<StaffSchedulePage />} />
+          <Route path="/staff/customers" element={<StaffCustomersPage />} />
+          <Route path="/staff/support" element={<StaffSupportPage />} />
+          <Route path="/staff/settings" element={<StaffSettingsPage />} />
         </Route>
       </Routes>
     </AnimatePresence>

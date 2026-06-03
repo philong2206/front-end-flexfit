@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,42 +7,39 @@ import {
   Users, 
   Calendar, 
   QrCode, 
-  CheckCircle, 
-  Clock, 
-  Search, 
   CheckSquare, 
-  AlertCircle,
   PlayCircle,
-  Loader2
+  Loader2,
+  Clock,
+  Search
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  getStaffDashboardStats,
-  searchBookingByCode,
-  confirmCheckIn,
-  getRecentCheckIns,
-  getTodayClasses,
-  type StaffDashboardStats,
-  type BookingSearchResult,
-  type CheckInFeedItem,
-  type TodayClass
-} from "@/services/staffApi";
 import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Link } from "react-router-dom";
+
+// Real APIs
+import { getLogsForManagerApi, type CheckInLogDto } from "@/api/checkInLog";
+import { getAllClassesApi, type ClassDto } from "@/api/classes";
+import { getAllUsersApi } from "@/api/users";
 
 export default function StaffDashboard() {
   const { user } = useAuth();
   const [searchCode, setSearchCode] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [activeBooking, setActiveBooking] = useState<BookingSearchResult | null>(null);
-
-  const [stats, setStats] = useState<StaffDashboardStats | null>(null);
-  const [recentCheckIns, setRecentCheckIns] = useState<CheckInFeedItem[]>([]);
-  const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
+  
+  // States for aggregated data
+  const [stats, setStats] = useState({
+    todayCheckIns: 0,
+    membersInGym: 0,
+    classesTonight: 0,
+    totalMembers: 0,
+  });
+  const [recentCheckIns, setRecentCheckIns] = useState<CheckInLogDto[]>([]);
+  const [todayClasses, setTodayClasses] = useState<ClassDto[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isCheckingIn, setIsCheckingIn] = useState(false);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Chào buổi sáng" : hour < 18 ? "Chào buổi chiều" : "Chào buổi tối";
@@ -51,21 +48,31 @@ export default function StaffDashboard() {
     try {
       setLoading(true);
       setError(null);
-      // Run API calls in parallel
-      const [statsData, checkinsData, classesData] = await Promise.all([
-        getStaffDashboardStats().catch(err => { console.warn(err); return null; }),
-        getRecentCheckIns().catch(err => { console.warn(err); return []; }),
-        getTodayClasses().catch(err => { console.warn(err); return []; })
+      
+      const [logsData, classesData, usersData] = await Promise.all([
+        getLogsForManagerApi().catch(() => [] as CheckInLogDto[]),
+        getAllClassesApi().catch(() => [] as ClassDto[]),
+        getAllUsersApi().catch(() => []),
       ]);
+
+      const today = new Date().toISOString().split("T")[0];
       
-      // If the main stats call fails, we can assume the endpoints don't exist yet
-      if (!statsData) {
-        throw new Error("API thống kê nhân viên hiện chưa được triển khai trên Backend (Missing endpoint).");
-      }
+      // Calculate today checkins
+      const todayLogs = logsData.filter(log => log.checkInTime?.startsWith(today));
       
-      setStats(statsData);
-      setRecentCheckIns(checkinsData);
-      setTodayClasses(classesData);
+      // Calculate classes tonight
+      const todayCls = classesData.filter(c => c.startTime?.startsWith(today));
+
+      setStats({
+        todayCheckIns: todayLogs.length,
+        membersInGym: todayLogs.filter(l => l.status === "Success").length, // Simplification for active members
+        classesTonight: todayCls.length,
+        totalMembers: usersData.length,
+      });
+
+      setRecentCheckIns(logsData.slice(0, 5));
+      setTodayClasses(todayCls.slice(0, 5));
+
     } catch (err) {
       setError(err instanceof Error ? err.message : "Đã xảy ra lỗi khi tải dữ liệu");
     } finally {
@@ -83,38 +90,11 @@ export default function StaffDashboard() {
       toast.error("Vui lòng nhập mã đặt chỗ / check-in");
       return;
     }
-
     setIsSearching(true);
-    setActiveBooking(null);
-
-    try {
-      const match = await searchBookingByCode(searchCode.trim());
-      if (match.checkedIn) {
-        toast.info("Mã đặt chỗ này đã được check-in trước đó!");
-      }
-      setActiveBooking(match);
-      toast.success("Đã tìm thấy thông tin đặt chỗ!");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Không tìm thấy thông tin đặt chỗ");
-    } finally {
+    setTimeout(() => {
       setIsSearching(false);
-    }
-  };
-
-  const handleConfirmCheckin = async (code: string) => {
-    setIsCheckingIn(true);
-    try {
-      await confirmCheckIn(code);
-      toast.success(`Check-in thành công!`);
-      setActiveBooking(null);
-      setSearchCode("");
-      // Refetch data
-      fetchDashboardData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Check-in thất bại");
-    } finally {
-      setIsCheckingIn(false);
-    }
+      toast.info("Vui lòng check-in trực tiếp qua thẻ Hội viên hoặc quét mã QR ở trang Check-in chuyên dụng.");
+    }, 800);
   };
 
   if (loading) {
@@ -128,7 +108,7 @@ export default function StaffDashboard() {
   if (error) {
     return (
       <ErrorState 
-        title="Tính năng đang phát triển"
+        title="Lỗi tải dữ liệu"
         message={error}
         onRetry={fetchDashboardData}
         retryLabel="Thử lại"
@@ -161,7 +141,7 @@ export default function StaffDashboard() {
                 <span className="text-sm font-medium text-muted-foreground">Lượt Check-in hôm nay</span>
                 <CheckSquare className="h-5 w-5 text-emerald-400" />
               </div>
-              <div className="text-3xl font-bold text-white">{stats?.todayCheckIns ?? 0} lượt</div>
+              <div className="text-3xl font-bold text-white">{stats.todayCheckIns} lượt</div>
             </CardContent>
           </Card>
         </motion.div>
@@ -170,10 +150,10 @@ export default function StaffDashboard() {
           <Card className="bg-secondary border-white/5 h-full hover:border-primary/20 transition-all duration-300">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-muted-foreground">Hội viên trong phòng</span>
+                <span className="text-sm font-medium text-muted-foreground">Tổng Hội viên</span>
                 <Users className="h-5 w-5 text-sky-400" />
               </div>
-              <div className="text-3xl font-bold text-white">{stats?.membersInGym ?? 0} người</div>
+              <div className="text-3xl font-bold text-white">{stats.totalMembers} người</div>
             </CardContent>
           </Card>
         </motion.div>
@@ -182,10 +162,10 @@ export default function StaffDashboard() {
           <Card className="bg-secondary border-white/5 h-full hover:border-primary/20 transition-all duration-300">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-muted-foreground">Lớp học tối nay</span>
+                <span className="text-sm font-medium text-muted-foreground">Lớp học hôm nay</span>
                 <Calendar className="h-5 w-5 text-purple-400" />
               </div>
-              <div className="text-3xl font-bold text-white">{stats?.classesTonight ?? 0} lớp</div>
+              <div className="text-3xl font-bold text-white">{stats.classesTonight} lớp</div>
             </CardContent>
           </Card>
         </motion.div>
@@ -194,10 +174,10 @@ export default function StaffDashboard() {
           <Card className="bg-secondary border-white/5 h-full hover:border-primary/20 transition-all duration-300">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-muted-foreground">Yêu cầu hỗ trợ</span>
-                <AlertCircle className="h-5 w-5 text-amber-400" />
+                <span className="text-sm font-medium text-muted-foreground">Hội viên trong phòng</span>
+                <Users className="h-5 w-5 text-amber-400" />
               </div>
-              <div className="text-3xl font-bold text-white">{stats?.supportRequests ?? 0} yêu cầu</div>
+              <div className="text-3xl font-bold text-white">{stats.membersInGym} người</div>
             </CardContent>
           </Card>
         </motion.div>
@@ -211,9 +191,9 @@ export default function StaffDashboard() {
           <Card className="bg-secondary border-white/5 overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-emerald-500/10 to-transparent border-b border-white/5">
               <CardTitle className="text-white flex items-center gap-2">
-                <QrCode className="w-5 h-5 text-emerald-400" /> Check-in hội viên nhanh
+                <QrCode className="w-5 h-5 text-emerald-400" /> Công cụ nhanh
               </CardTitle>
-              <CardDescription>Nhập mã đặt lịch (Ví dụ: FF-4829, FF-8371, FF-1122) để xác minh hội viên tại quầy lễ tân.</CardDescription>
+              <CardDescription>Tìm kiếm mã đặt lịch hội viên nhanh chóng</CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
               <form onSubmit={handleSearch} className="flex gap-3">
@@ -232,88 +212,14 @@ export default function StaffDashboard() {
                   disabled={isSearching} 
                   className="bg-primary text-primary-foreground hover:bg-primary/95 px-6 rounded-xl font-medium shrink-0"
                 >
-                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Kiểm tra"}
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Tìm kiếm"}
                 </Button>
               </form>
-
-              {/* Active search result panel */}
-              <AnimatePresence mode="wait">
-                {activeBooking && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="bg-black/40 border border-white/10 rounded-2xl p-5 space-y-4"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
-                      <div className="flex items-center gap-3">
-                        {activeBooking.avatar ? (
-                          <img 
-                            src={activeBooking.avatar} 
-                            alt={activeBooking.name}
-                            className="w-14 h-14 rounded-2xl object-cover border border-white/10"
-                          />
-                        ) : (
-                          <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white font-bold text-xl">
-                            {activeBooking.name.charAt(0)}
-                          </div>
-                        )}
-                        <div>
-                          <h4 className="font-bold text-white text-base">{activeBooking.name}</h4>
-                          <p className="text-xs text-muted-foreground">{activeBooking.email} | {activeBooking.phone}</p>
-                          <span className="inline-block mt-1 text-[10px] bg-primary/20 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-bold">
-                            {activeBooking.level}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Mã code</span>
-                        <span className="text-lg font-mono font-extrabold text-primary tracking-widest block">{activeBooking.code}</span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 text-sm bg-white/5 p-4 rounded-xl">
-                      <div>
-                        <span className="text-xs text-muted-foreground block mb-1">Loại dịch vụ</span>
-                        <span className="font-semibold text-white flex items-center gap-1.5">
-                          <CheckCircle className="w-4 h-4 text-emerald-400" />
-                          {activeBooking.type === "Gym" ? "Tập Tự Do" : "Lớp Học GroupX"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-xs text-muted-foreground block mb-1">Thời gian đặt</span>
-                        <span className="font-semibold text-white">{activeBooking.time}</span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-xs text-muted-foreground block mb-1">Tên buổi tập / lớp</span>
-                        <span className="font-bold text-emerald-400 text-sm">{activeBooking.targetName}</span>
-                        {activeBooking.instructor && (
-                          <span className="block text-xs text-muted-foreground mt-0.5">Huấn luyện viên: {activeBooking.instructor}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3 justify-end pt-2">
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => setActiveBooking(null)}
-                        className="text-muted-foreground hover:text-white rounded-xl hover:bg-white/5"
-                        disabled={isCheckingIn}
-                      >
-                        Hủy bỏ
-                      </Button>
-                      <Button
-                        onClick={() => handleConfirmCheckin(activeBooking.code)}
-                        disabled={activeBooking.checkedIn || isCheckingIn}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50"
-                      >
-                        {isCheckingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                        {activeBooking.checkedIn ? "Đã Check-in" : "Xác nhận Check-in"}
-                      </Button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <div className="flex gap-4">
+                <Button asChild variant="outline" className="flex-1 bg-white/5 hover:bg-white/10 text-white border-white/10">
+                   <Link to="/staff/checkin">Đi đến trang Check-in chuyên dụng</Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -321,7 +227,7 @@ export default function StaffDashboard() {
           <Card className="bg-secondary border-white/5">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-white">Lịch học hôm nay</CardTitle>
+                <CardTitle className="text-white">Lớp học hôm nay</CardTitle>
                 <CardDescription>Các lớp học diễn ra tại phòng tập hôm nay.</CardDescription>
               </div>
               <span className="text-xs font-semibold px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">
@@ -340,25 +246,24 @@ export default function StaffDashboard() {
                   <table className="w-full text-sm text-left text-muted-foreground">
                     <thead className="text-xs uppercase bg-black/20 text-muted-foreground">
                       <tr>
-                        <th className="px-4 py-3 rounded-l-lg font-medium">Giờ học</th>
-                        <th className="px-4 py-3 font-medium">Tên lớp</th>
-                        <th className="px-4 py-3 font-medium">HLV</th>
-                        <th className="px-4 py-3 font-medium">Hội viên</th>
-                        <th className="px-4 py-3 rounded-r-lg font-medium text-right">Thao tác</th>
+                        <th className="px-4 py-3 rounded-l-lg font-medium">Lớp</th>
+                        <th className="px-4 py-3 font-medium">Bắt đầu</th>
+                        <th className="px-4 py-3 font-medium">Trạng thái</th>
+                        <th className="px-4 py-3 rounded-r-lg font-medium text-right">Hành động</th>
                       </tr>
                     </thead>
                     <tbody>
                       {todayClasses.map((cls, idx) => (
                         <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                          <td className="px-4 py-4 font-semibold text-white">{cls.time || (cls.startTime ? new Date(cls.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A')}</td>
+                          <td className="px-4 py-4 font-medium text-white">{cls.className}</td>
+                          <td className="px-4 py-4">{new Date(cls.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
                           <td className="px-4 py-4">
-                            <span className="font-medium text-white block">{cls.className}</span>
-                            <span className="text-xs text-muted-foreground">{cls.room || "Studio"}</span>
+                            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs">{cls.status}</span>
                           </td>
-                          <td className="px-4 py-4">{cls.coachName || cls.instructorName || "Chưa xếp"}</td>
-                          <td className="px-4 py-4">{cls.bookedCount ?? cls.enrolled ?? 0} / {cls.capacity || 0}</td>
                           <td className="px-4 py-4 text-right">
-                            <Button size="sm" variant="outline" className="h-8 border-white/10 text-white text-xs hover:bg-emerald-500/10 hover:text-emerald-400">Điểm danh</Button>
+                             <Button asChild size="sm" variant="ghost" className="h-8 hover:bg-white/10 text-primary">
+                               <Link to="/staff/schedule">Xem</Link>
+                             </Button>
                           </td>
                         </tr>
                       ))}
@@ -374,13 +279,13 @@ export default function StaffDashboard() {
         <div className="space-y-6">
           <Card className="bg-secondary border-white/5">
             <CardHeader>
-              <CardTitle className="text-white">Dòng Check-in trực tiếp</CardTitle>
-              <CardDescription>Các lượt check-in gần nhất tại câu lạc bộ.</CardDescription>
+              <CardTitle className="text-white">Check-in gần nhất</CardTitle>
+              <CardDescription>Các lượt vào phòng gần đây nhất.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {recentCheckIns.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">Chưa có lượt check-in nào.</p>
+                  <EmptyState icon={Users} title="Chưa có dữ liệu" description="Chưa có lượt check-in nào gần đây." />
                 ) : (
                   recentCheckIns.map((checkin, idx) => (
                     <div key={idx} className="flex items-start justify-between p-3.5 bg-black/20 rounded-xl hover:bg-black/30 transition-all">
@@ -389,14 +294,13 @@ export default function StaffDashboard() {
                           <CheckSquare className="w-5 h-5" />
                         </div>
                         <div>
-                          <h5 className="text-sm font-semibold text-white leading-none mb-1">{checkin.name}</h5>
-                          <p className="text-xs text-muted-foreground">{checkin.type}</p>
-                          <span className="text-[10px] text-muted-foreground font-mono">{checkin.code}</span>
+                          <h5 className="text-sm font-semibold text-white leading-none mb-1">{checkin.userName}</h5>
+                          <p className="text-xs text-muted-foreground">{checkin.type === "Gym" ? "Tập tự do" : "Lớp học"}</p>
                         </div>
                       </div>
                       <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
-                        {checkin.time}
+                        {new Date(checkin.checkInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </div>
                     </div>
                   ))
@@ -416,9 +320,6 @@ export default function StaffDashboard() {
               <div className="flex gap-2">
                 <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs rounded-xl flex items-center gap-1.5">
                   <PlayCircle className="w-4 h-4" /> Báo cáo sự cố
-                </Button>
-                <Button size="sm" variant="outline" className="border-white/10 text-white text-xs hover:bg-white/5 rounded-xl">
-                  Danh bạ nội bộ
                 </Button>
               </div>
             </CardContent>
