@@ -1,84 +1,109 @@
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { User, LogOut, Shield, MapPin } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, MapPin, Shield, ShieldCheck, UserCheck, Users } from "lucide-react";
+import { getClassesForStaffApi } from "@/api/classes";
+import { getLogsForManagerApi, type CheckInLogDto } from "@/api/checkInLog";
+import { RoleSettingsPage, type SettingsStat } from "@/components/settings/RoleSettingsPage";
+
+type StaffStats = {
+  checkInsToday: number;
+  checkInsThisWeek: number;
+  classesToday: number;
+  supportedMembers: number;
+};
+
+const getLogTime = (log: CheckInLogDto) => log.checkInTime || log.checkInAt || log.scannedAt;
+
+const isSameDay = (date: Date, compare: Date) =>
+  date.getFullYear() === compare.getFullYear() &&
+  date.getMonth() === compare.getMonth() &&
+  date.getDate() === compare.getDate();
+
+const getWeekStart = (date: Date) => {
+  const result = new Date(date);
+  const day = result.getDay() || 7;
+  result.setHours(0, 0, 0, 0);
+  result.setDate(result.getDate() - day + 1);
+  return result;
+};
 
 export default function StaffSettingsPage() {
-  const { user, logout } = useAuth();
+  const [stats, setStats] = useState<StaffStats>({
+    checkInsToday: 0,
+    checkInsThisWeek: 0,
+    classesToday: 0,
+    supportedMembers: 0,
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadStats = async () => {
+      setLoadingStats(true);
+      const [logs, classes] = await Promise.all([
+        getLogsForManagerApi().catch(() => []),
+        getClassesForStaffApi().catch(() => []),
+      ]);
+
+      if (!mounted) return;
+
+      const now = new Date();
+      const weekStart = getWeekStart(now);
+      const validLogs = logs
+        .map((log) => ({ log, date: new Date(getLogTime(log) || "") }))
+        .filter((item) => !Number.isNaN(item.date.getTime()));
+      const todayLogs = validLogs.filter((item) => isSameDay(item.date, now));
+      const weekLogs = validLogs.filter((item) => item.date >= weekStart && item.date <= now);
+      const classTodayCount = classes.filter((item) => {
+        const date = new Date(item.startTime);
+        return !Number.isNaN(date.getTime()) && isSameDay(date, now);
+      }).length;
+      const supportedMembers = new Set(todayLogs.map((item) => item.log.userId).filter(Boolean)).size;
+
+      setStats({
+        checkInsToday: todayLogs.length,
+        checkInsThisWeek: weekLogs.length,
+        classesToday: classTodayCount,
+        supportedMembers,
+      });
+      setLoadingStats(false);
+    };
+
+    loadStats();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const profileExtra = useMemo(
+    () => (
+      <div className="mx-auto mt-2 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs text-muted-foreground">
+        <MapPin className="h-3.5 w-3.5 text-primary" />
+        Chi nhánh công tác theo phân quyền hiện tại
+      </div>
+    ),
+    []
+  );
+
+  const statCards: SettingsStat[] = [
+    { label: "Lượt check-in hôm nay", value: stats.checkInsToday, icon: UserCheck, color: "text-emerald-400" },
+    { label: "Lượt check-in tuần này", value: stats.checkInsThisWeek, icon: CalendarDays, color: "text-emerald-400" },
+    { label: "Lớp học hôm nay", value: stats.classesToday, icon: ShieldCheck, color: "text-emerald-400" },
+    { label: "Hội viên hỗ trợ", value: stats.supportedMembers, icon: Users, color: "text-emerald-400" },
+  ];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-1">Cài đặt Tài khoản</h1>
-        <p className="text-muted-foreground">Quản lý thông tin cá nhân và phiên đăng nhập</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-1 space-y-6">
-          <Card className="bg-secondary border-white/5 overflow-hidden">
-            <div className="h-24 bg-gradient-to-br from-primary/40 to-emerald-500/20" />
-            <CardContent className="pt-0 relative px-6 pb-6">
-              <div className="-mt-12 mb-4 flex justify-center">
-                {user?.avatar ? (
-                  <img src={user.avatar} alt="Avatar" className="w-24 h-24 rounded-full border-4 border-secondary object-cover" />
-                ) : (
-                  <div className="w-24 h-24 rounded-full border-4 border-secondary bg-primary/20 text-primary flex items-center justify-center text-3xl font-bold">
-                    {user?.fullName?.charAt(0) || "S"}
-                  </div>
-                )}
-              </div>
-              <div className="text-center space-y-1">
-                <h3 className="font-bold text-xl text-white">{user?.fullName}</h3>
-                <p className="text-sm text-muted-foreground">{user?.email}</p>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold text-xs mt-2">
-                  <Shield className="w-3.5 h-3.5" />
-                  Staff
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Button
-            onClick={logout}
-            variant="destructive"
-            className="w-full rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20"
-          >
-            <LogOut className="w-4 h-4 mr-2" /> Đăng xuất
-          </Button>
-        </div>
-
-        <div className="md:col-span-2 space-y-6">
-          <Card className="bg-secondary border-white/5">
-            <CardHeader>
-              <CardTitle className="text-white">Thông tin cá nhân</CardTitle>
-              <CardDescription>Các thông tin liên hệ nội bộ của bạn</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase">Họ và tên</label>
-                  <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white">
-                    <User className="w-4 h-4 text-primary" />
-                    <span>{user?.fullName}</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase">Chi nhánh công tác</label>
-                  <div className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white">
-                    <MapPin className="w-4 h-4 text-emerald-400" />
-                    <span>FlexFit Center (Mặc định)</span>
-                  </div>
-                </div>
-              </div>
-              <div className="pt-4 border-t border-white/5">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Để thay đổi thông tin cá nhân hoặc cấp lại mật khẩu, vui lòng liên hệ với Quản lý hệ thống (Admin) theo quy định nội bộ của Câu lạc bộ.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
+    <RoleSettingsPage
+      title="Cài đặt nhân viên"
+      subtitle="Quản lý tài khoản, ca làm việc và thông báo nội bộ."
+      roleLabel="Staff"
+      roleIcon={Shield}
+      statsTitle="Thống kê ca làm việc"
+      statsDescription="Tổng quan nhanh về lượt check-in và lớp học trong phạm vi nhân viên."
+      stats={statCards}
+      statsLoading={loadingStats}
+      profileExtra={profileExtra}
+    />
   );
 }

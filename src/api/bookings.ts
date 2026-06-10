@@ -75,6 +75,8 @@ export interface BookingResponse {
   className?: string;
   coachName?: string;
   creditUsed?: number;
+  hasReview?: boolean;
+  reviewId?: string | null;
   address?: string;
   district?: string;
   city?: string;

@@ -42,6 +42,9 @@ export const createReviewApi = async (data: CreateReviewRequest): Promise<{ mess
 export const getGymReviewsApi = async (gymId: string): Promise<ReviewDto[]> => {
   const response = await apiFetch(`${API_URL}/gym/${gymId}`);
   if (!response.ok) {
+    if (response.status === 500 || response.status === 404) {
+      return [];
+    }
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || errorData.Message || "Lấy danh sách đánh giá thất bại");
   }

@@ -5,7 +5,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { getAllGymsApi } from "@/api/gyms";
 import { getGymReviewsApi, type ReviewDto } from "@/api/reviews";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 
 export default function StaffSupportPage() {
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
@@ -15,14 +14,16 @@ export default function StaffSupportPage() {
   useEffect(() => {
     const fetchReviews = async () => {
       try {
-        // Since there is no "get all reviews" for staff, we fetch all gyms and get reviews for the first gym (or all of them)
-        // For performance, we'll just get reviews for the first active gym as an example for the staff module
         const gyms = await getAllGymsApi();
-        if (gyms.length > 0) {
-          const gymId = gyms[0].gymId;
-          const reviewsData = await getGymReviewsApi(gymId);
-          setReviews(reviewsData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-        }
+        const reviewGroups = await Promise.all(
+          gyms
+            .filter((gym) => Boolean(gym.gymId))
+            .map((gym) => getGymReviewsApi(gym.gymId).catch(() => [] as ReviewDto[]))
+        );
+        const reviewsData = reviewGroups
+          .flat()
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setReviews(reviewsData);
       } catch {
         toast.error("Lỗi tải danh sách đánh giá");
       } finally {
@@ -41,14 +42,14 @@ export default function StaffSupportPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white mb-1">Hỗ trợ & Đánh giá</h1>
-          <p className="text-muted-foreground">Lắng nghe phản hồi từ hội viên</p>
+          <p className="text-muted-foreground">Theo dõi đánh giá từ hội viên</p>
         </div>
         <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 w-fit">
           <button 
             onClick={() => setFilter("all")}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${filter === "all" ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:text-white'}`}
           >
-            Tất cả phản hồi
+            Tất cả đánh giá
           </button>
           <button 
             onClick={() => setFilter("low")}
@@ -61,7 +62,7 @@ export default function StaffSupportPage() {
 
       <Card className="bg-secondary border-white/5">
         <CardHeader>
-          <CardTitle className="text-white">Danh sách Phản hồi</CardTitle>
+          <CardTitle className="text-white">Danh sách đánh giá</CardTitle>
           <CardDescription>Các đánh giá gần đây về chất lượng phòng tập và lớp học</CardDescription>
         </CardHeader>
         <CardContent>
@@ -70,8 +71,8 @@ export default function StaffSupportPage() {
           ) : displayReviews.length === 0 ? (
             <EmptyState 
               icon={MessageSquare} 
-              title="Chưa có đánh giá nào" 
-              description={filter === "low" ? "Tuyệt vời! Không có đánh giá 1-2 sao nào." : "Phòng tập chưa nhận được phản hồi nào từ hội viên."} 
+              title={reviews.length === 0 ? "Chưa có dữ liệu đánh giá" : "Không có đánh giá cần chú ý"} 
+              description={filter === "low" ? "Không có đánh giá 1-2 sao nào." : "Chưa có đánh giá thật nào được trả về từ API hiện có."} 
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -90,9 +91,6 @@ export default function StaffSupportPage() {
                   <p className="text-sm text-gray-300 bg-white/5 p-3 rounded-xl border border-white/5">
                     "{review.comment}"
                   </p>
-                  <div className="flex justify-end">
-                    <Button size="sm" variant="ghost" className="h-8 text-xs text-primary hover:bg-primary/10">Phản hồi</Button>
-                  </div>
                 </div>
               ))}
             </div>

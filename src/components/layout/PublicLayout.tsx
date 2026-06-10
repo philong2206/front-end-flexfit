@@ -1,12 +1,13 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import {
-  Home, Search, Crown, LogIn, ShoppingCart,
-  Bell
+  Home, Search, Crown, LogIn, ShoppingCart
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMemberWalletSnapshot } from "@/hooks/useMemberWalletSnapshot";
 import { useResolvedUserId } from "@/hooks/useResolvedUserId";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { toast } from "sonner";
 
 export function PublicLayout() {
   const { isAuthenticated, role, user } = useAuth();
@@ -64,18 +65,20 @@ export function PublicLayout() {
 
           <div className="flex items-center gap-3 md:gap-4 z-50">
             <div className="hidden sm:flex items-center gap-3 text-muted-foreground border-r border-white/10 pr-4">
-              <button className="relative group p-2 hover:bg-white/5 rounded-full transition-colors">
+              <button 
+                className="relative group p-2 hover:bg-white/5 rounded-full transition-colors"
+                onClick={() => toast.info("Tính năng tìm kiếm đang phát triển")}
+              >
                 <Search className="w-5 h-5 group-hover:text-white transition-colors" />
               </button>
               {isAuthenticated && role === "member" && (
-                <button className="relative group p-2 hover:bg-white/5 rounded-full transition-colors">
-                  <Bell className="w-5 h-5 group-hover:text-white transition-colors" />
-                  <span className="absolute top-1.5 right-1.5 bg-primary w-2 h-2 rounded-full"></span>
-                </button>
+                <NotificationBell />
               )}
-              <button className="relative group p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer">
+              <button 
+                className="relative group p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer"
+                onClick={() => toast.info("Tính năng cửa hàng đang phát triển")}
+              >
                 <ShoppingCart className="w-5 h-5 group-hover:text-white transition-colors" />
-                <span className="absolute top-1.5 right-1.5 bg-primary text-white text-[10px] font-bold w-3 h-3 rounded-full flex items-center justify-center"></span>
               </button>
             </div>
 

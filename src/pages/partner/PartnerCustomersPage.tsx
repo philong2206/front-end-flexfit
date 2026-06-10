@@ -60,7 +60,7 @@ const Page = () => {
           ) : error ? (
             <div className="py-10">
               <ErrorState 
-                title="Tính năng đang phát triển"
+                title="Không tải được dữ liệu"
                 message={error}
                 onRetry={fetchCustomers}
               />

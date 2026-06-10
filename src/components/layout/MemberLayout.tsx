@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Home, CreditCard, User, LogOut, Menu, X,
-  LayoutGrid, CalendarDays, Bell, Search,
+  LayoutGrid, CalendarDays, Search,
   ShoppingCart
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,9 @@ import PageTransition from "@/components/layout/PageTransition";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMemberWalletSnapshot } from "@/hooks/useMemberWalletSnapshot";
 import { useResolvedUserId } from "@/hooks/useResolvedUserId";
-import { AiChatBot } from "@/components/ai/AiChatBot";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { toast } from "sonner";
+
 
 const NAV_ITEMS = [
   { label: "Trang chủ", path: "/", icon: Home },
@@ -70,14 +72,17 @@ export function MemberLayout() {
           {/* Right Actions */}
           <div className="flex items-center gap-3 md:gap-4 z-50">
             <div className="hidden sm:flex items-center gap-3 text-muted-foreground border-r border-white/10 pr-4">
-              <button className="relative group p-2 hover:bg-white/5 rounded-full transition-colors">
+              <button 
+                className="relative group p-2 hover:bg-white/5 rounded-full transition-colors"
+                onClick={() => toast.info("Tính năng tìm kiếm đang phát triển")}
+              >
                 <Search className="w-5 h-5 group-hover:text-white transition-colors" />
               </button>
-              <button className="relative group p-2 hover:bg-white/5 rounded-full transition-colors">
-                <Bell className="w-5 h-5 group-hover:text-white transition-colors" />
-                <span className="absolute top-1.5 right-1.5 bg-primary w-2 h-2 rounded-full"></span>
-              </button>
-              <button className="relative group p-2 hover:bg-white/5 rounded-full transition-colors">
+              <NotificationBell />
+              <button 
+                className="relative group p-2 hover:bg-white/5 rounded-full transition-colors"
+                onClick={() => toast.info("Tính năng cửa hàng đang phát triển")}
+              >
                 <ShoppingCart className="w-5 h-5 group-hover:text-white transition-colors" />
               </button>
             </div>
@@ -169,7 +174,6 @@ export function MemberLayout() {
         </div>
       </main>
 
-      <AiChatBot />
 
       {/* Footer */}
       <footer className="border-t border-white/5 bg-secondary pt-12 pb-8 mt-auto">

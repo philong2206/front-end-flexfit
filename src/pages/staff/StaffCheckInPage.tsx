@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { QrCode, Search, CheckCircle, Loader2, Camera, Upload, Keyboard, X, ShieldAlert, User, Calendar, Clock, MapPin, Tag } from "lucide-react";
+import { QrCode, Search, CheckCircle, Loader2, Camera, Upload, Keyboard, X, ShieldAlert, User, Calendar, Clock, MapPin, Tag, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { checkInGymApi, checkInClassApi, getLogsForManagerApi, type CheckInLogDto } from "@/api/checkInLog";
 import { getPartnerGymBookingsApi, getPartnerClassBookingsApi } from "@/api/bookings";
@@ -11,22 +11,76 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 
+type LooseRecord = Record<string, unknown>;
+type EnrichedCheckInLog = CheckInLogDto & LooseRecord;
 
+const getStringValue = (source: unknown, keys: string[]) => {
+  const record = source as LooseRecord | null | undefined;
+  if (!record) return "";
+
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+
+  return "";
+};
+
+const normalizeLookupValue = (value: string) => value.trim().toUpperCase();
+
+const getLookupTokens = (source: unknown) =>
+  [
+    getStringValue(source, ["bookingId", "BookingId", "id"]),
+    getStringValue(source, ["gymBookingId", "GymBookingId"]),
+    getStringValue(source, ["classBookingId", "ClassBookingId"]),
+    getStringValue(source, ["bookingCode", "BookingCode"]),
+    getStringValue(source, ["code", "Code"]),
+    getStringValue(source, ["gymBookingCode", "GymBookingCode"]),
+    getStringValue(source, ["classBookingCode", "ClassBookingCode"]),
+    getStringValue(source, ["qrToken", "QrToken"]),
+  ]
+    .filter(Boolean)
+    .map(normalizeLookupValue);
+
+const findRelatedBooking = (log: unknown, bookings: LooseRecord[]) => {
+  const logTokens = new Set(getLookupTokens(log));
+  if (logTokens.size === 0) return null;
+
+  return bookings.find((booking) => getLookupTokens(booking).some((token) => logTokens.has(token))) ?? null;
+};
+
+const enrichLogWithBooking = (log: CheckInLogDto, booking: LooseRecord | null): EnrichedCheckInLog => {
+  if (!booking) return log as EnrichedCheckInLog;
+
+  return {
+    ...log,
+    userName: log.userName || getStringValue(booking, ["userName", "customerName", "userFullName", "fullName"]),
+    customerName: log.customerName || getStringValue(booking, ["customerName", "userFullName", "userName", "fullName"]),
+    userFullName: log.userFullName || getStringValue(booking, ["userFullName", "customerName", "userName", "fullName"]),
+    bookingCode: getStringValue(log, ["bookingCode", "code", "gymBookingCode", "classBookingCode"]) ||
+      getStringValue(booking, ["bookingCode", "BookingCode", "code"]),
+    branchName: log.branchName || getStringValue(booking, ["branchName", "BranchName"]),
+    gymName: log.gymName || getStringValue(booking, ["gymName", "GymName"]),
+    className: log.className || getStringValue(booking, ["className", "ClassName"]),
+    sessionName: log.sessionName || getStringValue(booking, ["sessionName", "SessionName"]),
+    name: log.name || getStringValue(booking, ["name", "sessionName", "className"]),
+    bookingType: log.bookingType || getStringValue(booking, ["_type", "bookingType", "type"]),
+  };
+};
 
 export default function StaffCheckInPage() {
   const [activeTab, setActiveTab] = useState<"camera" | "upload" | "manual">("manual");
   const [searchCode, setSearchCode] = useState("");
   const [isCheckingIn, setIsCheckingIn] = useState(false);
-  
-  const [recentCheckIns, setRecentCheckIns] = useState<CheckInLogDto[]>([]);
+
+  const [recentCheckIns, setRecentCheckIns] = useState<EnrichedCheckInLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
 
-  // Scanner states
   const [isScanning, setIsScanning] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
-  // Detail states
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bookingDetail, setBookingDetail] = useState<any>(null);
   const [scannedBookingId, setScannedBookingId] = useState<string | null>(null);
@@ -37,23 +91,25 @@ export default function StaffCheckInPage() {
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [isBookingsLoading, setIsBookingsLoading] = useState(true);
 
-  const fetchRecentLogs = async () => {
+  const fetchRecentLogs = async (bookingsOverride = allBookings) => {
     try {
       setLoadingLogs(true);
       const data = await getLogsForManagerApi();
       console.log("CHECKIN HISTORY RESPONSE", data);
-      
+
       const todayStr = new Date().toDateString();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const todayLogs = data.filter((log: any) => {
         const timeStr = log.checkInTime || log.checkInAt || log.scannedAt;
         if (!timeStr) return false;
         const d = new Date(timeStr);
-        if (isNaN(d.getTime())) return false;
+        if (Number.isNaN(d.getTime())) return false;
         return d.toDateString() === todayStr;
       });
 
-      setRecentCheckIns(todayLogs);
+      const bookingRecords = bookingsOverride as LooseRecord[];
+      const enrichedLogs = todayLogs.map((log) => enrichLogWithBooking(log, findRelatedBooking(log, bookingRecords)));
+      setRecentCheckIns(enrichedLogs);
     } catch (err) {
       console.error(err);
     } finally {
@@ -80,10 +136,7 @@ export default function StaffCheckInPage() {
         getPartnerGymBookingsApi().catch(() => []),
         getPartnerClassBookingsApi().catch(() => [])
       ]);
-      
-      console.log("API RESPONSE", { gymRes, classRes });
 
-      // Handle cases where response might be wrapped in { data: [...] } or { items: [...] }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const normalizeArray = (res: any) => {
         if (Array.isArray(res)) return res;
@@ -100,10 +153,13 @@ export default function StaffCheckInPage() {
       const gymBookings = gymArray.map((b: any) => ({ ...b, _type: "GYM" }));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const classBookings = classArray.map((b: any) => ({ ...b, _type: "CLASS" }));
-      
       const combined = [...gymBookings, ...classBookings];
-      console.log("SET BOOKINGS", combined);
-      
+
+      if (import.meta.env.DEV) {
+        console.log("API RESPONSE", { gymRes, classRes });
+        console.log("SET BOOKINGS", combined);
+      }
+
       setAllBookings(combined);
       return combined;
     } catch (err) {
@@ -115,12 +171,16 @@ export default function StaffCheckInPage() {
   };
 
   useEffect(() => {
-    fetchRecentLogs();
-    fetchAllBookings();
+    const loadInitialData = async () => {
+      const bookings = await fetchAllBookings();
+      await fetchRecentLogs(bookings);
+    };
+
+    loadInitialData();
     return () => {
       stopCamera();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isScanning]);
 
   const startCamera = async () => {
@@ -132,7 +192,7 @@ export default function StaffCheckInPage() {
           verbose: false
         });
       }
-      
+
       await scannerRef.current.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
@@ -141,7 +201,7 @@ export default function StaffCheckInPage() {
           stopCamera();
         },
         () => {
-          // just ignore scanning errors (happens when no QR in frame)
+          // Ignore scanning errors while there is no QR code in frame.
         }
       );
       setIsScanning(true);
@@ -154,7 +214,7 @@ export default function StaffCheckInPage() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
-    
+
     try {
       const html5QrCode = new Html5Qrcode("qr-reader-upload");
       const decodedText = await html5QrCode.scanFile(file, false);
@@ -164,8 +224,7 @@ export default function StaffCheckInPage() {
       toast.error("Không tìm thấy mã QR trong ảnh. Vui lòng thử ảnh khác.");
       console.error(err);
     }
-    
-    // Reset file input
+
     e.target.value = "";
   };
 
@@ -174,14 +233,12 @@ export default function StaffCheckInPage() {
     let type: "GYM" | "CLASS" | undefined = undefined;
     let bookingId: string | undefined = undefined;
 
-    // Is it JSON?
     try {
       const parsed = JSON.parse(rawText);
       if (parsed.bookingCode) bookingCode = parsed.bookingCode;
       if (parsed.bookingId) bookingId = parsed.bookingId;
       if (parsed.type) type = parsed.type;
     } catch {
-      // Not JSON, check if it's URL with query
       try {
         if (rawText.includes("?")) {
           const url = new URL(rawText.startsWith("http") ? rawText : `http://localhost${rawText}`);
@@ -191,11 +248,16 @@ export default function StaffCheckInPage() {
           if (typeParam) type = typeParam.toUpperCase() as "GYM" | "CLASS";
         }
       } catch {
-        // Just raw string
+        // Raw booking code.
       }
     }
+
     return { bookingCode, type, bookingId };
   };
+
+  const isGuid = (value?: string | null) =>
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
   const handleQrScanSuccess = (decodedText: string) => {
     const { bookingCode } = parseQrPayload(decodedText);
@@ -229,31 +291,27 @@ export default function StaffCheckInPage() {
     }
 
     try {
-      console.log("ALL BOOKINGS FOR CHECKIN", currentBookings);
-      console.log("ALL BOOKINGS DETAIL", JSON.stringify(currentBookings, null, 2));
-      console.log("SEARCH INPUT", payloadBookingId);
+      if (import.meta.env.DEV) {
+        console.log("SEARCH INPUT", payloadBookingId);
+      }
 
-      const normalizedInput = String(payloadBookingId ?? "").trim().toLowerCase();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let foundDetail: any = null;
+      const normalizedInput = String(payloadBookingId ?? "").trim().toUpperCase();
       let foundType: "GYM" | "CLASS" | null = null;
 
-      // Find matching booking by code or id. Check multiple possible field names.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      foundDetail = currentBookings.find((b: any) => {
-        const matchesId = 
-          String(b.bookingId ?? "").trim().toLowerCase() === normalizedInput ||
-          String(b.BookingId ?? "").trim().toLowerCase() === normalizedInput ||
-          String(b.id ?? "").trim().toLowerCase() === normalizedInput ||
-          String(b.gymBookingId ?? "").trim().toLowerCase() === normalizedInput ||
-          String(b.classBookingId ?? "").trim().toLowerCase() === normalizedInput ||
-          String(b.bookingCode ?? "").trim().toLowerCase() === normalizedInput ||
-          String(b.BookingCode ?? "").trim().toLowerCase() === normalizedInput ||
-          String(b.code ?? "").trim().toLowerCase() === normalizedInput ||
-          String(b.qrToken ?? "").trim().toLowerCase() === normalizedInput ||
-          String(b.QrToken ?? "").trim().toLowerCase() === normalizedInput;
-        
+      const foundDetail = currentBookings.find((b: any) => {
+        const id1 = String(b.bookingId ?? "").trim().toUpperCase();
+        const id2 = String(b.BookingId ?? "").trim().toUpperCase();
+        const id3 = String(b.id ?? "").trim().toUpperCase();
+        const id4 = String(b.gymBookingId ?? "").trim().toUpperCase();
+        const id5 = String(b.classBookingId ?? "").trim().toUpperCase();
+        const code1 = String(b.bookingCode ?? "").trim().toUpperCase();
+        const code2 = String(b.BookingCode ?? "").trim().toUpperCase();
+        const code3 = String(b.code ?? "").trim().toUpperCase();
+        const qr1 = String(b.qrToken ?? "").trim().toUpperCase();
+        const qr2 = String(b.QrToken ?? "").trim().toUpperCase();
+        const matchesId = [id1, id2, id3, id4, id5, code1, code2, code3, qr1, qr2].includes(normalizedInput);
+
         if (currentType && b._type !== currentType) return false;
         return matchesId;
       });
@@ -263,24 +321,21 @@ export default function StaffCheckInPage() {
       }
 
       if (!foundDetail) {
-        console.log("--- SEARCH FAILED ---");
-        console.log("Search Input:", payloadBookingId);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        console.log("List bookingId:", currentBookings.map((b: any) => b.bookingId || b.BookingId || b.id || b.gymBookingId || b.classBookingId));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        console.log("List bookingCode:", currentBookings.map((b: any) => b.bookingCode || b.BookingCode || b.code));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        console.log("List qrToken:", currentBookings.map((b: any) => b.qrToken || b.QrToken));
-        throw new Error("Booking không tồn tại hoặc không thuộc quyền quản lý của bạn.");
+        if (import.meta.env.DEV) {
+          console.log("--- SEARCH FAILED ---");
+          console.log("Search Input:", payloadBookingId);
+        }
+        throw new Error("Không tìm thấy mã booking. Vui lòng kiểm tra lại mã BK hoặc QR.");
       }
 
       setBookingDetail(foundDetail);
       setScannedBookingType(foundType);
-      setScannedBookingId(foundDetail.bookingId || foundDetail.gymBookingId || foundDetail.classBookingId || foundDetail.id);
+      setScannedBookingId(foundDetail.bookingId || foundDetail.gymBookingId || foundDetail.classBookingId || foundDetail.id || foundDetail.bookingCode);
       toast.success("Đã tìm thấy thông tin Booking!");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error(err);
+
       if (err?.status === 401 || err?.response?.status === 401) {
         toast.error("Phiên đăng nhập hết hạn hoặc thiếu token. Vui lòng đăng nhập lại.");
       } else if (err?.status === 403 || err?.response?.status === 403) {
@@ -299,20 +354,25 @@ export default function StaffCheckInPage() {
 
   const processCheckIn = async () => {
     if (!scannedBookingId || !scannedBookingType) return;
-    
+
     setIsCheckingIn(true);
-    
+
     try {
-      if (bookingDetail.checkInStatus === 'CheckedIn') {
+      if (bookingDetail.checkInStatus === "CheckedIn") {
         toast.info("Booking này đã được check-in trước đó.");
         setIsCheckingIn(false);
         return;
       }
 
       if (scannedBookingType === "GYM") {
-        const payload = { 
+        const candidateBookingId = bookingDetail.bookingId || bookingDetail.gymBookingId || scannedBookingId;
+        const safeBookingId = isGuid(candidateBookingId) ? candidateBookingId : undefined;
+        const payload = {
           userId: bookingDetail.userId,
-          gymBookingId: scannedBookingId,
+          gymBookingId: safeBookingId,
+          bookingId: safeBookingId,
+          bookingCode: bookingDetail.bookingCode || (!safeBookingId ? scannedBookingId : searchCode.trim()),
+          qrToken: bookingDetail.qrToken,
           status: "Success",
           message: "Staff check-in bằng QR/Mã"
         };
@@ -320,7 +380,7 @@ export default function StaffCheckInPage() {
         await checkInGymApi(payload);
         toast.success("Check-in Gym thành công!");
       } else {
-        const payload = { 
+        const payload = {
           userId: bookingDetail.userId,
           classBookingId: scannedBookingId,
           status: "Success",
@@ -330,12 +390,12 @@ export default function StaffCheckInPage() {
         await checkInClassApi(payload);
         toast.success("Check-in Lớp học thành công!");
       }
-      
+
       setSearchCode("");
       setBookingDetail(null);
       setScannedBookingId(null);
       setScannedBookingType(null);
-      fetchRecentLogs();
+      fetchRecentLogs(allBookings);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error("BACKEND ERROR RESPONSE:", err);
@@ -355,13 +415,63 @@ export default function StaffCheckInPage() {
     }
   };
 
+  const getLogMemberName = (log: EnrichedCheckInLog) =>
+    log.userName || log.customerName || log.userFullName || "Hội viên";
+
+  const getLogInitial = (log: EnrichedCheckInLog) =>
+    getLogMemberName(log).trim().charAt(0).toUpperCase() || "H";
+
+  const getLogIsSuccess = (log: EnrichedCheckInLog) =>
+    String(log.status || "").toLowerCase() === "success";
+
+  const getLogBookingCode = (log: EnrichedCheckInLog) =>
+    getStringValue(log, ["bookingCode", "code", "gymBookingCode", "classBookingCode"]);
+
+  const getLogBookingType = (log: EnrichedCheckInLog) => {
+    const rawType = String(log.type || log.bookingType || "").toUpperCase();
+    if (rawType === "GYM") return "Gym tự do";
+    if (rawType === "CLASS") return "Lớp học";
+    return log.className ? "Lớp học" : "Gym tự do";
+  };
+
+  const getLogBranchName = (log: EnrichedCheckInLog) =>
+    log.branchName || log.gymName || "";
+
+  const getLogServiceName = (log: EnrichedCheckInLog) => {
+    const rawType = String(log.type || log.bookingType || "").toUpperCase();
+    const branchName = getLogBranchName(log);
+
+    if (rawType === "GYM") {
+      return branchName ? `Open Gym - ${branchName}` : (log.sessionName || log.name || "Open Gym");
+    }
+
+    if (rawType === "CLASS") {
+      return log.className || log.name || log.sessionName || "";
+    }
+
+    if (log.className) return log.className;
+    if (log.sessionName) return branchName ? `Open Gym - ${branchName}` : log.sessionName;
+    return log.name || "";
+  };
+
+  const getLogDate = (log: EnrichedCheckInLog) => {
+    const value = log.checkInTime || log.checkInAt || log.scannedAt;
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const getLogTime = (log: EnrichedCheckInLog) => {
+    const date = getLogDate(log);
+    return date ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--:--";
+  };
+
   const renderBookingCard = () => {
     if (!bookingDetail) return null;
 
     const now = new Date();
     const startTime = new Date(bookingDetail.startTime);
     const endTime = new Date(bookingDetail.endTime);
-    
     const minCheckInTime = new Date(startTime.getTime() - 15 * 60000);
     const maxCheckInTime = new Date(endTime.getTime() + 10 * 60000);
 
@@ -385,7 +495,7 @@ export default function StaffCheckInPage() {
     } else if (isTooEarly) {
       badgeText = "CHƯA ĐẾN GIỜ";
       badgeColor = "bg-orange-500/20 text-orange-400";
-      statusMessage = `Chưa đến giờ check-in. Có thể check-in từ ${minCheckInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }).replace(/AM|PM/i, '').trim()}.`;
+      statusMessage = `Chưa đến giờ check-in. Có thể check-in từ ${minCheckInTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }).replace(/AM|PM/i, "").trim()}.`;
     } else if (isTooLate) {
       badgeText = "HẾT HẠN";
       badgeColor = "bg-red-500/20 text-red-400";
@@ -400,11 +510,10 @@ export default function StaffCheckInPage() {
     return (
       <div className="space-y-6 mt-6 animate-fade-in border-t border-white/10 pt-6">
         <h3 className="text-xl font-bold text-white mb-4">Thông tin Booking</h3>
-        
+
         <div className="bg-black/40 border border-white/10 rounded-2xl p-6 relative overflow-hidden">
-          {/* Header background abstract */}
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary"></div>
-          
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary" />
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -466,8 +575,8 @@ export default function StaffCheckInPage() {
         </div>
 
         <div className="flex gap-4 pt-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="flex-1 h-14 rounded-xl border-white/10 text-white hover:bg-white/5"
             onClick={() => {
               setBookingDetail(null);
@@ -478,10 +587,10 @@ export default function StaffCheckInPage() {
           >
             Hủy / Quét lại
           </Button>
-          <Button 
-            onClick={processCheckIn} 
-            disabled={isCheckingIn || !canCheckIn} 
-            className={`flex-1 h-14 rounded-xl shadow-lg text-lg font-bold ${canCheckIn ? 'bg-primary hover:bg-primary/90 text-white' : 'bg-gray-600 text-gray-300 cursor-not-allowed'}`}
+          <Button
+            onClick={processCheckIn}
+            disabled={isCheckingIn || !canCheckIn}
+            className={`flex-1 h-14 rounded-xl shadow-lg text-lg font-bold ${canCheckIn ? "bg-primary hover:bg-primary/90 text-white" : "bg-gray-600 text-gray-300 cursor-not-allowed"}`}
           >
             {isCheckingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : "XÁC NHẬN CHECK-IN"}
           </Button>
@@ -490,42 +599,49 @@ export default function StaffCheckInPage() {
     );
   };
 
+  const successfulCheckIns = recentCheckIns.filter(getLogIsSuccess).length;
+  const failedCheckIns = recentCheckIns.length - successfulCheckIns;
+  const latestCheckInDate = recentCheckIns
+    .map(getLogDate)
+    .filter((date): date is Date => Boolean(date))
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  const latestCheckInTime = latestCheckInDate
+    ? latestCheckInDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "--:--";
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-white">Điểm danh hội viên</h1>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* LEFT COLUMN */}
         <div className="lg:col-span-7 space-y-6">
           <Card className="bg-secondary border-white/5 overflow-hidden">
             <CardHeader className="bg-white/5 border-b border-white/5">
               <CardTitle className="text-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <QrCode className="w-5 h-5 text-primary" /> 
+                  <QrCode className="w-5 h-5 text-primary" />
                   Xác minh Check-in
                 </div>
               </CardTitle>
               <CardDescription>Chọn phương thức đọc mã QR hoặc nhập tay</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              {/* TABS (Hides when bookingDetail is active) */}
               {!bookingDetail && (
                 <>
                   <div className="flex border-b border-white/5 bg-black/20">
-                    <button 
+                    <button
                       onClick={() => { setActiveTab("manual"); stopCamera(); }}
                       className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${activeTab === "manual" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-white hover:bg-white/5"}`}
                     >
                       <Keyboard className="w-4 h-4" /> Nhập mã
                     </button>
-                    <button 
+                    <button
                       onClick={() => { setActiveTab("camera"); setCameraError(null); }}
                       className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${activeTab === "camera" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-white hover:bg-white/5"}`}
                     >
                       <Camera className="w-4 h-4" /> Camera
                     </button>
-                    <button 
+                    <button
                       onClick={() => { setActiveTab("upload"); stopCamera(); }}
                       className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${activeTab === "upload" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-white hover:bg-white/5"}`}
                     >
@@ -534,12 +650,10 @@ export default function StaffCheckInPage() {
                   </div>
 
                   <div className="p-6 space-y-6">
-                    
-                    {/* CAMERA TAB */}
                     {activeTab === "camera" && (
                       <div className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl p-4 bg-black/20 min-h-[300px]">
-                        <div id="qr-reader" className="w-full max-w-sm overflow-hidden rounded-xl bg-black"></div>
-                        
+                        <div id="qr-reader" className="w-full max-w-sm overflow-hidden rounded-xl bg-black" />
+
                         {cameraError && (
                           <div className="mt-4 flex items-center gap-2 text-red-400 bg-red-500/10 p-3 rounded-lg text-sm">
                             <ShieldAlert className="w-5 h-5 shrink-0" />
@@ -561,7 +675,6 @@ export default function StaffCheckInPage() {
                       </div>
                     )}
 
-                    {/* UPLOAD TAB */}
                     {activeTab === "upload" && (
                       <div className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl p-8 bg-black/20 text-center space-y-4">
                         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
@@ -571,14 +684,14 @@ export default function StaffCheckInPage() {
                           <h4 className="font-semibold text-white mb-1">Tải ảnh QR Code lên</h4>
                           <p className="text-sm text-muted-foreground">Hỗ trợ định dạng PNG, JPG, JPEG</p>
                         </div>
-                        <div id="qr-reader-upload" className="hidden"></div>
+                        <div id="qr-reader-upload" className="hidden" />
                         <div className="relative overflow-hidden inline-block">
                           <Button className="bg-white hover:bg-gray-200 text-black rounded-xl">
                             Chọn tệp ảnh
                           </Button>
-                          <input 
-                            type="file" 
-                            accept="image/png, image/jpeg, image/jpg, image/webp" 
+                          <input
+                            type="file"
+                            accept="image/png, image/jpeg, image/jpg, image/webp"
                             onChange={handleFileUpload}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                           />
@@ -586,7 +699,6 @@ export default function StaffCheckInPage() {
                       </div>
                     )}
 
-                    {/* INPUT AND ACTIONS */}
                     <div className="space-y-4 pt-4 border-t border-white/5">
                       <div className="relative">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -598,11 +710,11 @@ export default function StaffCheckInPage() {
                           className="w-full bg-black/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder:text-muted-foreground font-mono font-bold tracking-widest focus:border-primary transition-all text-sm uppercase"
                         />
                       </div>
-                      
+
                       <div className="flex gap-3">
-                        <Button 
-                          onClick={() => handleSearchBooking()} 
-                          disabled={isFetchingDetail || !searchCode || isBookingsLoading} 
+                        <Button
+                          onClick={() => handleSearchBooking()}
+                          disabled={isFetchingDetail || !searchCode || isBookingsLoading}
                           className="w-full bg-primary hover:bg-primary/90 rounded-xl h-12 shadow-[0_0_15px_rgba(255,255,255,0.1)] text-white font-bold"
                         >
                           {isBookingsLoading ? (
@@ -618,62 +730,128 @@ export default function StaffCheckInPage() {
                   </div>
                 </>
               )}
-              
-              {/* BOOKING DETAIL CARD */}
+
               {bookingDetail && (
                 <div className="p-6 bg-black/30">
                   {renderBookingCard()}
                 </div>
               )}
-              
             </CardContent>
           </Card>
         </div>
 
-        {/* RIGHT COLUMN */}
         <div className="lg:col-span-5 space-y-6">
-          <Card className="bg-secondary border-white/5 h-full">
-            <CardHeader className="border-b border-white/5 pb-4">
-              <CardTitle className="text-white text-lg">Lịch sử hôm nay</CardTitle>
+          <Card className="bg-[#182235] border-white/10 h-full rounded-2xl shadow-none">
+            <CardHeader className="border-b border-white/10 pb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-white text-lg flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-emerald-400" />
+                    Lịch sử hôm nay
+                  </CardTitle>
+                  <CardDescription className="mt-1 text-slate-400">
+                    {recentCheckIns.length} lượt check-in hôm nay
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => fetchRecentLogs(allBookings)}
+                  disabled={loadingLogs}
+                  className="h-9 w-9 rounded-xl border-white/10 bg-[#101827] text-slate-400 hover:bg-white/5 hover:text-white"
+                  aria-label="Tải lại lịch sử check-in"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingLogs ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-4">
               {loadingLogs ? (
-                <div className="flex justify-center p-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+                <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 bg-[#101827] p-10 text-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+                  <p className="text-sm text-slate-400">Đang tải lịch sử check-in...</p>
+                </div>
               ) : recentCheckIns.length === 0 ? (
-                <div className="p-8">
-                  <EmptyState icon={CheckCircle} title="Chưa có điểm danh" description="Dữ liệu check-in hôm nay sẽ hiển thị tại đây." />
+                <div className="rounded-2xl border border-white/10 bg-[#101827] p-8">
+                  <EmptyState
+                    icon={CheckCircle}
+                    title="Chưa có lượt check-in hôm nay"
+                    description="Các lượt check-in thành công sẽ hiển thị tại đây."
+                  />
                 </div>
               ) : (
-                <div className="divide-y divide-white/5">
-                    {recentCheckIns.map((log, idx) => (
-                      <div key={log.checkInId ?? idx} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors">
-                      <div className="flex gap-3">
-                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${log.status === 'Success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
-                           {log.status === 'Success' ? <CheckCircle className="w-5 h-5" /> : <X className="w-5 h-5" />}
-                         </div>
-                         <div>
-                           <p className="font-semibold text-white text-sm">{log.userName || log.customerName || log.userFullName || "Hội viên"}</p>
-                           <p className="text-xs text-muted-foreground mt-0.5">
-                             {String(log.type || log.bookingType || "").toUpperCase() === "GYM"
-                               ? (log.branchName
-                                   ? `Open Gym - ${log.branchName}${log.gymName ? ` (${log.gymName})` : ""}`
-                                   : (log.sessionName || log.name || "Open Gym"))
-                               : (log.className || log.name || log.sessionName || "Lớp học")}
-                           </p>
-                         </div>
-                      </div>
-                      <div className="text-right">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mb-1 ${log.status === 'Success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                          {log.status === 'Success' ? 'Hợp lệ' : 'Thất bại'}
-                        </span>
-                        <p className="text-xs text-muted-foreground">
-                          {(() => {
-                            const t = log.checkInTime || log.checkInAt || log.scannedAt;
-                            if (!t) return "Chưa có thời gian";
-                            const d = new Date(t);
-                            return isNaN(d.getTime()) ? "--:--" : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                          })()}
-                        </p>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl border border-white/10 bg-[#101827] p-3">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Thành công</p>
+                      <p className="mt-1 text-xl font-bold text-emerald-400">{successfulCheckIns}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-[#101827] p-3">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Thất bại</p>
+                      <p className="mt-1 text-xl font-bold text-red-400">{failedCheckIns}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-[#101827] p-3">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Gần nhất</p>
+                      <p className="mt-1 text-xl font-bold text-white">{latestCheckInTime}</p>
+                    </div>
+                  </div>
+
+                  {recentCheckIns.map((log, idx) => (
+                    <div
+                      key={log.checkInId ?? idx}
+                      className="rounded-2xl border border-white/10 bg-[#101827] p-4 transition-colors hover:bg-white/5"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 flex-1 gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/15 text-sm font-bold text-emerald-400">
+                            {getLogInitial(log)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate font-semibold text-white">{getLogMemberName(log)}</p>
+                              {getLogBookingCode(log) && (
+                                <span className="rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[11px] font-semibold text-emerald-400">
+                                  {getLogBookingCode(log)}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Badge variant="outline" className="border-white/10 bg-slate-500/15 text-slate-300">
+                                {getLogBookingType(log)}
+                              </Badge>
+                              {getLogServiceName(log) && (
+                                <span className="min-w-0 truncate text-sm font-medium text-white">
+                                  {getLogServiceName(log)}
+                                </span>
+                              )}
+                            </div>
+
+                            {getLogBranchName(log) && (
+                              <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
+                                <MapPin className="h-3.5 w-3.5 text-emerald-400" />
+                                <span className="truncate">{getLogBranchName(log)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          <div className="mb-2 flex items-center justify-end gap-1.5 text-xs font-semibold text-slate-300">
+                            <Clock className="h-3.5 w-3.5 text-slate-400" />
+                            {getLogTime(log)}
+                          </div>
+                          <Badge
+                            className={
+                              getLogIsSuccess(log)
+                                ? "border-emerald-500/20 bg-emerald-500/15 text-emerald-400"
+                                : "border-red-500/20 bg-red-500/15 text-red-400"
+                            }
+                          >
+                            {getLogIsSuccess(log) ? "Hợp lệ" : "Thất bại"}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -682,7 +860,6 @@ export default function StaffCheckInPage() {
             </CardContent>
           </Card>
         </div>
-
       </div>
     </div>
   );

@@ -3,12 +3,11 @@ import { motion } from "framer-motion";
 import { Building2, Loader2, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getAllGymsApi, type GymDto } from "@/api/gyms";
-import { useAuth } from "@/contexts/AuthContext";
+import type { GymDto } from "@/api/gyms";
+import { getPartnerGyms } from "@/services/partnerApi";
 import { toast } from "sonner";
 
 export default function PartnerGymsPage() {
-  const { user } = useAuth();
   const [gyms, setGyms] = useState<GymDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,13 +16,8 @@ export default function PartnerGymsPage() {
     try {
       setLoading(true);
       setError(null);
-      if (!user?.userId) {
-        setGyms([]);
-        setError("Không xác định được tài khoản đối tác");
-        return;
-      }
-      const data = await getAllGymsApi();
-      setGyms(data.filter((gym) => gym.ownerId === user.userId));
+      const data = await getPartnerGyms();
+      setGyms(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Không thể tải danh sách phòng tập";
       setError(message);
@@ -35,8 +29,7 @@ export default function PartnerGymsPage() {
 
   useEffect(() => {
     fetchGyms();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.userId]);
+  }, []);
 
   return (
     <div className="space-y-6 pb-10">

@@ -5,6 +5,39 @@ import { apiFetch } from "@/lib/apiFetch";
 
 const API_BASE = "/api";
 
+type PartnerChartPoint = {
+  month?: string;
+  value?: number;
+};
+
+type PartnerReviewApi = Record<string, unknown> & {
+  reviewId?: string;
+  rating?: number;
+  comment?: string;
+  customerName?: string;
+  userFullName?: string;
+  memberName?: string;
+  gymName?: string;
+  className?: string;
+  createdAt?: string;
+};
+
+function unwrapCollection(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (data && typeof data === "object") {
+    const wrapper = data as Record<string, unknown>;
+    for (const key of ["data", "items", "result", "results", "records"]) {
+      const nested = wrapper[key];
+      if (Array.isArray(nested)) return nested as Record<string, unknown>[];
+      if (nested && typeof nested === "object") {
+        const unwrapped = unwrapCollection(nested);
+        if (unwrapped.length > 0) return unwrapped;
+      }
+    }
+  }
+  return [];
+}
+
 async function parseError(response: Response, fallbackMessage: string): Promise<never> {
   const error = await response.json().catch(() => ({}));
   throw new Error(error.message || error.Message || fallbackMessage);
@@ -18,12 +51,24 @@ export async function getPartnerDashboardStats() {
     await parseError(response, "Không thể tải thống kê dashboard");
   }
 
-  return response.json();
+  const data = await response.json();
+  const occupancyRate = Number(data.occupancyRate ?? 0);
+  const revenueChart = Array.isArray(data.revenueChart) ? data.revenueChart as PartnerChartPoint[] : [];
+  const bookingChart = Array.isArray(data.bookingChart) ? data.bookingChart as PartnerChartPoint[] : [];
+
+  return {
+    revenue: data.revenueThisMonth,
+    newCustomers: data.newCustomersThisMonth,
+    totalBookings: data.bookingsThisMonth,
+    occupancyRate: occupancyRate <= 1 ? occupancyRate * 100 : occupancyRate,
+    revenueData: revenueChart.map((c) => ({ name: c.month ?? "", total: c.value ?? 0 })),
+    attendanceData: bookingChart.map((c) => ({ time: c.month ?? "", count: c.value ?? 0 }))
+  };
 }
 
 // ========== GYMS ==========
 export async function getPartnerGyms() {
-  const response = await apiFetch(`${API_BASE}/gyms`);
+  const response = await apiFetch(`${API_BASE}/gyms/partner`);
 
   if (!response.ok) {
     await parseError(response, "Không thể tải danh sách phòng tập");
@@ -82,7 +127,7 @@ export async function deleteGym(gymId: string) {
 
 // ========== BRANCHES ==========
 export async function getPartnerBranches() {
-  const response = await apiFetch(`${API_BASE}/branches`);
+  const response = await apiFetch(`${API_BASE}/branches/partner`);
 
   if (!response.ok) {
     await parseError(response, "Không thể tải danh sách chi nhánh");
@@ -93,7 +138,7 @@ export async function getPartnerBranches() {
 
 // ========== CLASSES ==========
 export async function getPartnerClasses() {
-  const response = await apiFetch(`${API_BASE}/classes`);
+  const response = await apiFetch(`${API_BASE}/classes/partner`);
 
   if (!response.ok) {
     await parseError(response, "Không thể tải danh sách lớp học");
@@ -215,11 +260,34 @@ export async function deletePromotion(promotionId: string) {
 
 // ========== REVIEWS ==========
 export async function getPartnerReviews() {
-  const response = await apiFetch(`${API_BASE}/partner/reviews`);
+  const gyms = unwrapCollection(await getPartnerGyms().catch(() => []));
+  const reviewGroups = await Promise.all(
+    gyms
+      .map((gym) => ({
+        gymId: typeof gym.gymId === "string" ? gym.gymId : "",
+        gymName: typeof gym.gymName === "string" ? gym.gymName : "",
+      }))
+      .filter((gym) => Boolean(gym.gymId))
+      .map(async (gym) => {
+        const response = await apiFetch(`${API_BASE}/Review/gym/${gym.gymId}`);
+        if (!response.ok) return [];
+        const data = await response.json().catch(() => []);
+        return unwrapCollection(data).map((review) => ({
+          ...review,
+          gymName: typeof review.gymName === "string" && review.gymName ? review.gymName : gym.gymName,
+        }));
+      })
+  );
 
-  if (!response.ok) {
-    await parseError(response, "Không thể tải danh sách đánh giá");
-  }
+  const reviews = reviewGroups.flat() as PartnerReviewApi[];
 
-  return response.json();
+  return reviews.map((review, index) => ({
+    reviewId: review.reviewId ?? `review-${index}`,
+    rating: Number(review.rating ?? 0),
+    comment: review.comment ?? "",
+    customerName: review.customerName ?? review.userFullName ?? review.memberName ?? "Khách hàng",
+    gymName: review.gymName ?? "",
+    className: review.className ?? "",
+    createdAt: review.createdAt ?? "",
+  })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }

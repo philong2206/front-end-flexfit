@@ -9,17 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import type { ClassDto, CreateClassRequest, UpdateClassRequest } from "@/api/classes";
 import { 
-  getAllClassesApi, 
-  getClassesByBranchApi, 
   getClassByIdApi,
   createClassApi, 
   updateClassApi, 
   changeClassStatusApi,
   deleteClassApi
 } from "@/api/classes";
-import { getAllBranchesApi, type BranchDto } from "@/api/branches";
-import { getAllGymsApi } from "@/api/gyms";
-import { useAuth } from "@/contexts/AuthContext";
+import type { BranchDto } from "@/api/branches";
+import { getPartnerClasses, getPartnerBranches } from "@/services/partnerApi";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
@@ -46,7 +43,6 @@ const classStatusMeta: Record<ClassStatus, { label: string; className: string }>
 };
 
 export default function PartnerClassesPage() {
-  const { user } = useAuth();
   const [classes, setClasses] = useState<ClassDto[]>([]);
   const [branches, setBranches] = useState<BranchDto[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
@@ -76,43 +72,21 @@ export default function PartnerClassesPage() {
       setLoading(true);
       setError(null);
 
-      if (!user?.userId) {
-        setBranches([]);
-        setClasses([]);
-        setError("Không xác định được tài khoản đối tác");
-        return;
-      }
-
-      const [gymList, branchList] = await Promise.all([
-        getAllGymsApi(),
-        getAllBranchesApi(),
-      ]);
-      const partnerGymIds = new Set(
-        gymList.filter((gym) => gym.ownerId === user.userId).map((gym) => gym.gymId)
-      );
-      const partnerBranches = branchList.filter((branch) => partnerGymIds.has(branch.gymId));
+      const partnerBranches = await getPartnerBranches();
       setBranches(partnerBranches);
 
       const selectedBranchBelongsToPartner =
-        selectedBranch === "all" || partnerBranches.some((branch) => branch.branchId === selectedBranch);
+        selectedBranch === "all" || partnerBranches.some((branch: BranchDto) => branch.branchId === selectedBranch);
 
       if (!selectedBranchBelongsToPartner) {
         setSelectedBranch("all");
         return;
       }
 
-      const partnerBranchIds = new Set(partnerBranches.map((branch) => branch.branchId));
-      if (partnerBranchIds.size === 0) {
-        setClasses([]);
-        return;
-      }
-
-      const data = selectedBranch === "all"
-        ? await getAllClassesApi()
-        : await getClassesByBranchApi(selectedBranch);
-      const sorted = data
-        .filter((cls) => partnerBranchIds.has(cls.branchId))
-        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      const partnerClasses = await getPartnerClasses();
+      const sorted = partnerClasses
+        .filter((cls: ClassDto) => selectedBranch === "all" || cls.branchId === selectedBranch)
+        .sort((a: ClassDto, b: ClassDto) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
       setClasses(sorted);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Không thể tải danh sách lớp học";
@@ -249,7 +223,7 @@ export default function PartnerClassesPage() {
 
   useEffect(() => {
     fetchClasses(); // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBranch, user?.userId]);
+  }, [selectedBranch]);
 
   return (
     <div className="space-y-6 pb-10">

@@ -372,6 +372,7 @@ export default function ExplorePage() {
       }
 
       window.dispatchEvent(new Event("wallet-update"));
+      window.dispatchEvent(new Event("notifications:refresh"));
       toast.success("Đặt chỗ thành công!");
       setIsBooked(true);
       setTimeout(() => {

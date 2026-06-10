@@ -3,8 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { getPartnerPromotions } from '@/services/partnerApi';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Tag, Loader2, Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Tag, Loader2 } from 'lucide-react';
 
 interface Promotion {
   promotionId: string;
@@ -41,9 +40,6 @@ const Page = () => {
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Quản lý khuyến mãi</h1>
           <p className="text-muted-foreground text-lg">Thiết lập các chương trình ưu đãi cho hội viên.</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
-          <Plus className="w-4 h-4" /> Tạo khuyến mãi mới
-        </Button>
       </div>
 
       <Card className="bg-secondary border-white/5">
@@ -55,7 +51,7 @@ const Page = () => {
             </div>
           ) : error ? (
             <ErrorState 
-              title="Tính năng đang phát triển"
+              title="Không tải được dữ liệu"
               message={error}
               onRetry={fetchPromotions}
             />
@@ -63,9 +59,7 @@ const Page = () => {
             <EmptyState 
               icon={Tag} 
               title="Chưa có khuyến mãi"
-              description="Bạn chưa tạo chương trình khuyến mãi nào. Hãy bắt đầu tạo mới để thu hút hội viên."
-              actionLabel="Tạo khuyến mãi đầu tiên"
-              onAction={() => {}}
+              description="Hiện chưa có chương trình khuyến mãi nào để hiển thị."
             />
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

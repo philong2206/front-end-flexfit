@@ -26,11 +26,18 @@ export interface CheckInLogDto {
   name?: string;
   checkInAt?: string;
   scannedAt?: string;
+  bookingCode?: string;
+  bookingId?: string;
+  gymBookingId?: string;
+  classBookingId?: string;
 }
 
 export interface CheckInGymRequest {
-  userId: string;
-  gymBookingId: string;
+  userId?: string;
+  gymBookingId?: string;
+  bookingId?: string;
+  bookingCode?: string;
+  qrToken?: string;
   status: string;
   message?: string;
 }

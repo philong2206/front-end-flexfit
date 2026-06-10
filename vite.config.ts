@@ -29,4 +29,18 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("react") || id.includes("react-router-dom")) return "react";
+          if (id.includes("framer-motion")) return "motion";
+          if (id.includes("recharts") || id.includes("d3-")) return "charts";
+          if (id.includes("@radix-ui")) return "ui";
+          return "vendor";
+        },
+      },
+    },
+  },
 });

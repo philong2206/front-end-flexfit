@@ -1,18 +1,17 @@
 import { motion } from "framer-motion";
-import { Users, DollarSign, Calendar as CalendarIcon, TrendingUp, Activity, MapPin, Loader2, Trash2, BookOpen } from "lucide-react";
+import { Users, DollarSign, Calendar as CalendarIcon, TrendingUp, Activity, MapPin, Loader2, Trash2, BookOpen, Building } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useEffect, useState } from "react";
-import { getAllBranchesApi } from "@/api/branches";
 import type { BranchDto } from "@/api/branches";
-import { getAllClassesApi, createClassApi, deleteClassApi } from "@/api/classes";
+import { createClassApi, deleteClassApi } from "@/api/classes";
 import type { ClassDto } from "@/api/classes";
-import { getAllGymsApi } from "@/api/gyms";
-import { getPartnerDashboardStats } from "@/services/partnerApi";
+import { getPartnerDashboardStats, getPartnerClasses, getPartnerBranches } from "@/services/partnerApi";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 // Removed mock data for revenue and attendance
@@ -30,7 +29,6 @@ const CATEGORY_MAPPING = [
 ];
 
 export default function PartnerDashboard() {
-  const { user } = useAuth();
   const [dashboardStats, setDashboardStats] = useState<{
     revenue: number;
     newCustomers: number;
@@ -40,6 +38,7 @@ export default function PartnerDashboard() {
     attendanceData: Array<{ time: string; count: number }>;
   } | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
   
   const [branches, setBranches] = useState<BranchDto[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
@@ -72,22 +71,10 @@ export default function PartnerDashboard() {
   const [newCalories, setNewCalories] = useState(500);
   const [newThumbnailUrl, setNewThumbnailUrl] = useState("");
 
-  const getPartnerBranchesForCurrentUser = async () => {
-    if (!user?.userId) return [];
-    const [gymList, branchList] = await Promise.all([
-      getAllGymsApi(),
-      getAllBranchesApi(),
-    ]);
-    const partnerGymIds = new Set(
-      gymList.filter((gym) => gym.ownerId === user.userId).map((gym) => gym.gymId)
-    );
-    return branchList.filter((branch) => partnerGymIds.has(branch.gymId));
-  };
-
   const fetchBranches = async () => {
     try {
       setLoadingBranches(true);
-      const data = await getPartnerBranchesForCurrentUser();
+      const data = await getPartnerBranches();
       setBranches(data);
       if (data.length > 0) {
         setNewBranchId(data[0].branchId);
@@ -102,13 +89,8 @@ export default function PartnerDashboard() {
   const fetchClasses = async () => {
     try {
       setLoadingClasses(true);
-      const partnerBranches = branches.length > 0 ? branches : await getPartnerBranchesForCurrentUser();
-      const partnerBranchIds = new Set(partnerBranches.map((branch) => branch.branchId));
-      const data = partnerBranchIds.size > 0
-        ? (await getAllClassesApi()).filter((cls) => partnerBranchIds.has(cls.branchId))
-        : [];
-      // Sort classes by start time ascending
-      const sorted = data.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      const partnerClasses = await getPartnerClasses();
+      const sorted = partnerClasses.sort((a: ClassDto, b: ClassDto) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
       setClasses(sorted);
     } catch (error) {
       console.error("Lỗi khi tải danh sách lớp học:", error);
@@ -118,6 +100,7 @@ export default function PartnerDashboard() {
   };
 
   useEffect(() => {
+    setLoadingStats(true);
     getPartnerDashboardStats()
       .then((data) => {
         setDashboardStats(data);
@@ -134,12 +117,12 @@ export default function PartnerDashboard() {
           revenueData: [],
           attendanceData: []
         });
-      });
+      })
+      .finally(() => setLoadingStats(false));
 
     fetchBranches();
     fetchClasses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.userId]);
+  }, []);
 
   const chartRevenueData = dashboardStats?.revenueData || [];
   const chartAttendanceData = dashboardStats?.attendanceData || [];
@@ -238,7 +221,6 @@ export default function PartnerDashboard() {
           <p className="text-muted-foreground text-lg">Quản lý hiệu suất kinh doanh của chuỗi FLEXFIT chi nhánh Quận 1.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="border-white/10 glass text-white">Xuất báo cáo</Button>
           <Button onClick={() => setShowCreateModal(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             Tạo lớp học mới
           </Button>
@@ -247,13 +229,13 @@ export default function PartnerDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="bg-secondary border-white/5 h-full">
+          <Card className="bg-card border-white/5 h-full hover:-translate-y-1 hover:shadow-xl hover:border-white/10 transition-all duration-300 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Doanh thu tháng này</CardTitle>
               <DollarSign className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">{dashboardStats?.revenue ?? 0} credits</div>
+              {loadingStats ? <Skeleton className="h-8 w-24 mb-2" /> : <div className="text-2xl font-bold text-white">{dashboardStats?.revenue ?? 0} credits</div>}
               <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" /> +12.5% so với tháng trước
               </p>
@@ -262,13 +244,13 @@ export default function PartnerDashboard() {
         </motion.div>
         
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="bg-secondary border-white/5 h-full">
+          <Card className="bg-card border-white/5 h-full hover:-translate-y-1 hover:shadow-xl hover:border-white/10 transition-all duration-300 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Khách hàng mới</CardTitle>
               <Users className="h-4 w-4 text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">+{dashboardStats?.newCustomers ?? 0}</div>
+              {loadingStats ? <Skeleton className="h-8 w-16 mb-2" /> : <div className="text-2xl font-bold text-white">+{dashboardStats?.newCustomers ?? 0}</div>}
               <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" /> +4.1% so với tháng trước
               </p>
@@ -277,26 +259,26 @@ export default function PartnerDashboard() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Card className="bg-secondary border-white/5 h-full">
+          <Card className="bg-card border-white/5 h-full hover:-translate-y-1 hover:shadow-xl hover:border-white/10 transition-all duration-300 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Tổng lượt đặt chỗ</CardTitle>
               <CalendarIcon className="h-4 w-4 text-purple-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">{dashboardStats?.totalBookings ?? 0}</div>
+              {loadingStats ? <Skeleton className="h-8 w-16 mb-2" /> : <div className="text-2xl font-bold text-white">{dashboardStats?.totalBookings ?? 0}</div>}
               <p className="text-xs text-muted-foreground mt-1">Trong 30 ngày qua</p>
             </CardContent>
           </Card>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="bg-secondary border-white/5 h-full">
+          <Card className="bg-card border-white/5 h-full hover:-translate-y-1 hover:shadow-xl hover:border-white/10 transition-all duration-300 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Tỷ lệ lấp đầy</CardTitle>
               <Activity className="h-4 w-4 text-amber-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">{dashboardStats?.occupancyRate ?? 0}%</div>
+              {loadingStats ? <Skeleton className="h-8 w-20 mb-2" /> : <div className="text-2xl font-bold text-white">{(dashboardStats?.occupancyRate ?? 0).toFixed(1)}%</div>}
               <p className="text-xs text-muted-foreground mt-1">Trung bình các lớp học</p>
             </CardContent>
           </Card>
@@ -305,7 +287,7 @@ export default function PartnerDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <Card className="bg-secondary border-white/5">
+          <Card className="bg-card border-white/5 rounded-2xl hover:shadow-xl transition-all duration-300">
             <CardHeader>
               <CardTitle className="text-white">Biểu đồ doanh thu</CardTitle>
               <CardDescription>Doanh thu tính theo USD trong 6 tháng gần nhất</CardDescription>
@@ -335,7 +317,7 @@ export default function PartnerDashboard() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <Card className="bg-secondary border-white/5">
+          <Card className="bg-card border-white/5 rounded-2xl hover:shadow-xl transition-all duration-300">
             <CardHeader>
               <CardTitle className="text-white">Mật độ khách đến phòng tập</CardTitle>
               <CardDescription>Lưu lượng khách trung bình theo khung giờ trong ngày</CardDescription>
@@ -372,7 +354,7 @@ export default function PartnerDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="lg:col-span-2">
-          <Card className="bg-secondary border-white/5 h-full">
+          <Card className="bg-card border-white/5 h-full hover:-translate-y-1 hover:shadow-xl hover:border-white/10 transition-all duration-300 rounded-2xl">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-white">Lớp học sắp diễn ra</CardTitle>
@@ -393,15 +375,20 @@ export default function PartnerDashboard() {
                   <tbody>
                     {loadingClasses ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
-                          Đang tải danh sách lớp học...
+                        <td colSpan={5} className="px-4 py-8">
+                          <Skeleton className="w-full h-[150px] rounded-xl" />
                         </td>
                       </tr>
                     ) : classes.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                          Chưa có lớp học nào được tạo.
+                        <td colSpan={5} className="py-8">
+                          <EmptyState 
+                            icon={CalendarIcon}
+                            title="Không có lớp học nào"
+                            description="Chưa có lớp học nào được lên lịch."
+                            actionLabel="Tạo lớp học"
+                            onAction={() => setShowCreateModal(true)}
+                          />
                         </td>
                       </tr>
                     ) : classes.map((cls) => {
@@ -456,7 +443,7 @@ export default function PartnerDashboard() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
-          <Card className="bg-secondary border-white/5 h-full">
+          <Card className="bg-card border-white/5 h-full hover:-translate-y-1 hover:shadow-xl hover:border-white/10 transition-all duration-300 rounded-2xl">
             <CardHeader>
               <CardTitle className="text-white">Chi nhánh hoạt động</CardTitle>
               <CardDescription>Trạng thái các cơ sở hiện tại</CardDescription>
@@ -464,9 +451,13 @@ export default function PartnerDashboard() {
             <CardContent>
               <div className="space-y-4">
                 {loadingBranches ? (
-                  <p className="text-muted-foreground text-sm">Đang tải dữ liệu...</p>
+                  <Skeleton className="w-full h-16 rounded-xl" />
                 ) : branches.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">Chưa có chi nhánh nào.</p>
+                  <EmptyState 
+                    icon={Building}
+                    title="Chưa có chi nhánh"
+                    description="Hiện tại không có chi nhánh nào hoạt động."
+                  />
                 ) : branches.map((branch) => (
                   <div key={branch.branchId} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/20">
                     <div className="flex gap-3 items-center">
@@ -496,7 +487,7 @@ export default function PartnerDashboard() {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-secondary border border-white/10 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl relative my-8"
+            className="bg-card border border-white/10 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl relative my-8"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 border-b border-white/5 bg-black/20">
@@ -681,7 +672,7 @@ export default function PartnerDashboard() {
                 </Button>
                 <Button 
                   type="submit"
-                  className="glow-btn" 
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground" 
                   disabled={creating}
                 >
                   {creating ? (

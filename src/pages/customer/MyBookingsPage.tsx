@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Calendar, Clock, MapPin, AlertTriangle } from "lucide-react";
+import { Calendar, Clock, MapPin, AlertTriangle, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getMyGymBookingsApi, getMyClassBookingsApi, cancelGymBookingApi, cancelClassBookingApi } from "@/api/bookings";
 import type { BookingResponse } from "@/api/bookings";
+import { createReviewApi } from "@/api/reviews";
 import { toast } from "sonner";
 import { openGoogleMaps } from "@/lib/mapUtils";
 import { getAllBranchesApi, type BranchDto } from "@/api/branches";
@@ -18,6 +19,10 @@ export default function MyBookingsPage() {
   const [filter, setFilter] = useState<"upcoming" | "completed" | "cancelled">("upcoming");
   const [bookingToCancel, setBookingToCancel] = useState<BookingResponse | null>(null);
   const [branches, setBranches] = useState<BranchDto[]>([]);
+  const [reviewBooking, setReviewBooking] = useState<BookingResponse | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   const fetchBookings = async () => {
     try {
@@ -97,6 +102,42 @@ export default function MyBookingsPage() {
 
   const [selectedDetailBooking, setSelectedDetailBooking] = useState<BookingResponse | null>(null);
 
+  const isCheckedIn = (booking: BookingResponse) => booking.checkInStatus === "CheckedIn";
+  const isReviewed = (booking: BookingResponse) => Boolean(booking.hasReview || booking.reviewId);
+  const openReviewModal = (booking: BookingResponse) => {
+    setReviewBooking(booking);
+    setReviewRating(5);
+    setReviewComment("");
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewBooking) return;
+    try {
+      setSubmittingReview(true);
+      await createReviewApi({
+        bookingId: reviewBooking.bookingId,
+        bookingType: reviewBooking.classId ? "Class" : "Gym",
+        rating: reviewRating,
+        comment: reviewComment.trim()
+      });
+      toast.success("Đánh giá thành công");
+      setReviewBooking(null);
+      setReviewComment("");
+      await fetchBookings();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Gửi đánh giá thất bại";
+      if (message.includes("Check-in") || message.includes("check-in")) {
+        toast.error("Bạn chỉ có thể đánh giá sau khi đã hoàn thành check-in.");
+      } else if (message.includes("1 lần") || message.includes("trước") || message.includes("truoc")) {
+        toast.error("Lịch đặt này đã được bạn đánh giá trước đó.");
+      } else {
+        toast.error(message);
+      }
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   return (
     <div className="space-y-8 pb-10">
       <div>
@@ -158,6 +199,36 @@ export default function MyBookingsPage() {
                     {filter === "upcoming" && (
                       <Button variant="outline" size="sm" onClick={() => setBookingToCancel(booking)} className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-400 flex-1 sm:flex-none">Hủy lịch</Button>
                     )}
+                    {booking.status?.toLowerCase() !== "cancelled" && isCheckedIn(booking) && !isReviewed(booking) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openReviewModal(booking)}
+                        className="flex-1 sm:flex-none border-primary/30 text-primary hover:bg-primary/10 hover:text-primary"
+                      >
+                        Đánh giá
+                      </Button>
+                    )}
+                    {booking.status?.toLowerCase() !== "cancelled" && isCheckedIn(booking) && isReviewed(booking) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled
+                        className="flex-1 sm:flex-none border-emerald-500/20 text-emerald-300 disabled:opacity-80"
+                      >
+                        Đã đánh giá
+                      </Button>
+                    )}
+                    {filter === "completed" && booking.status?.toLowerCase() !== "cancelled" && !isCheckedIn(booking) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled
+                        className="flex-1 sm:flex-none border-white/10 text-muted-foreground disabled:opacity-70"
+                      >
+                        Chưa hoàn thành
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => setSelectedDetailBooking(booking)} className="flex-1 sm:flex-none border-white/10 hover:bg-white/5 text-primary border-primary/20">Chi tiết</Button>
                   </div>
                 </CardContent>
@@ -165,6 +236,67 @@ export default function MyBookingsPage() {
             ))}
           </div>
         </motion.div>
+      )}
+
+      {/* Review Modal */}
+      {reviewBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setReviewBooking(null)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-primary/20 bg-[#101914] p-5 shadow-2xl"
+          >
+            <div className="mb-5">
+              <Badge className="mb-3 border-primary/20 bg-primary/10 text-primary">
+                {reviewBooking.classId ? "Lớp học" : "Open Gym"}
+              </Badge>
+              <h3 className="text-xl font-bold text-white">
+                {reviewBooking.className || reviewBooking.sessionName || reviewBooking.gymName || "Buổi tập"}
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {reviewBooking.branchName || "FLEXFIT"} · {formatTime(reviewBooking.startTime)} - {formatTime(reviewBooking.endTime)}
+              </p>
+            </div>
+
+            <div className="mb-5 flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setReviewRating(star)}
+                  className="rounded-lg p-1.5 text-primary transition hover:bg-primary/10"
+                  aria-label={`${star} sao`}
+                >
+                  <Star className={`h-7 w-7 ${star <= reviewRating ? "fill-primary" : "fill-transparent opacity-45"}`} />
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+              rows={4}
+              maxLength={500}
+              placeholder="Chia sẻ cảm nhận của bạn"
+              className="mb-5 w-full resize-none rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition placeholder:text-muted-foreground focus:border-primary/50"
+            />
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 border-white/10 text-white hover:bg-white/5"
+                onClick={() => setReviewBooking(null)}
+                disabled={submittingReview}
+              >
+                Đóng
+              </Button>
+              <Button className="flex-1 glow-btn" onClick={handleSubmitReview} disabled={submittingReview}>
+                {submittingReview ? "Đang gửi..." : "Gửi đánh giá"}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
       )}
 
       {/* Detail Booking Modal */}

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
@@ -36,7 +37,6 @@ import PartnerDashboard from "@/pages/partner/PartnerDashboard";
 import PartnerGymsPage from "@/pages/partner/PartnerGymsPage";
 import PartnerClassesPage from "@/pages/partner/PartnerClassesPage";
 import PartnerCustomersPage from "@/pages/partner/PartnerCustomersPage";
-import PartnerRevenuePage from "@/pages/partner/PartnerRevenuePage";
 import PartnerPromotionsPage from "@/pages/partner/PartnerPromotionsPage";
 import PartnerReviewsPage from "@/pages/partner/PartnerReviewsPage";
 import PartnerSettingsPage from "@/pages/partner/PartnerSettingsPage";
@@ -46,9 +46,6 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminApprovalsPage from "@/pages/admin/AdminApprovalsPage";
 import AdminPartnersPage from "@/pages/admin/AdminPartnersPage";
-import AdminRevenuePage from "@/pages/admin/AdminRevenuePage";
-import AdminReportsPage from "@/pages/admin/AdminReportsPage";
-import AdminSupportPage from "@/pages/admin/AdminSupportPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
 
 // Staff Pages
@@ -58,6 +55,34 @@ import StaffSchedulePage from "@/pages/staff/StaffSchedulePage";
 import StaffCustomersPage from "@/pages/staff/StaffCustomersPage";
 import StaffSupportPage from "@/pages/staff/StaffSupportPage";
 import StaffSettingsPage from "@/pages/staff/StaffSettingsPage";
+
+const AdminRevenuePage = lazy(() => import("@/pages/admin/AdminRevenuePage"));
+const PartnerRevenuePage = lazy(() => import("@/pages/partner/PartnerRevenuePage"));
+const AiCoachGlobal = lazy(() =>
+  import("@/components/ai/AiCoachGlobal").then((module) => ({ default: module.AiCoachGlobal }))
+);
+
+function LazyPage({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      {children}
+    </Suspense>
+  );
+}
+
+function LazyAiCoachGlobal() {
+  const { role, isAuthenticated } = useAuth();
+
+  if (!isAuthenticated || role !== "member") {
+    return null;
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <AiCoachGlobal />
+    </Suspense>
+  );
+}
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) {
   const { role, isAuthenticated, logout } = useAuth();
@@ -120,8 +145,8 @@ function AnimatedRoutes() {
           <Route path="/partner/gyms" element={<PartnerGymsPage />} />
           <Route path="/partner/classes" element={<PartnerClassesPage />} />
           <Route path="/partner/customers" element={<PartnerCustomersPage />} />
-          <Route path="/partner/revenue" element={<PartnerRevenuePage />} />
-          <Route path="/partner/analytics" element={<PartnerRevenuePage />} />
+          <Route path="/partner/revenue" element={<LazyPage><PartnerRevenuePage /></LazyPage>} />
+          <Route path="/partner/analytics" element={<LazyPage><PartnerRevenuePage /></LazyPage>} />
           <Route path="/partner/promotions" element={<PartnerPromotionsPage />} />
           <Route path="/partner/reviews" element={<PartnerReviewsPage />} />
           <Route path="/partner/settings" element={<PartnerSettingsPage />} />
@@ -132,10 +157,8 @@ function AnimatedRoutes() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/partners" element={<AdminPartnersPage />} />
-          <Route path="/admin/revenue" element={<AdminRevenuePage />} />
+          <Route path="/admin/revenue" element={<LazyPage><AdminRevenuePage /></LazyPage>} />
           <Route path="/admin/approvals" element={<AdminApprovalsPage />} />
-          <Route path="/admin/reports" element={<AdminReportsPage />} />
-          <Route path="/admin/support" element={<AdminSupportPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
         </Route>
 
@@ -158,6 +181,7 @@ function App() {
     <AuthProvider>
       <Router>
         <AnimatedRoutes />
+        <LazyAiCoachGlobal />
       </Router>
       <Toaster position="top-right" richColors theme="dark" />
     </AuthProvider>

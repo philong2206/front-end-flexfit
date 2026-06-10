@@ -3,8 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getPartnerRevenueReport } from '@/services/partnerApi';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
-import { DollarSign, Loader2, Download } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { DollarSign, Loader2 } from 'lucide-react';
 
 interface RevenueReport {
   totalRevenue: number;
@@ -38,9 +37,6 @@ const Page = () => {
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Báo cáo doanh thu</h1>
           <p className="text-muted-foreground text-lg">Theo dõi và phân tích doanh thu từ các cơ sở của bạn.</p>
         </div>
-        <Button variant="outline" className="border-white/10 glass text-white gap-2">
-          <Download className="w-4 h-4" /> Xuất báo cáo
-        </Button>
       </div>
 
       {loading ? (
@@ -54,7 +50,7 @@ const Page = () => {
         <Card className="bg-secondary border-white/5">
           <CardContent>
             <ErrorState 
-              title="Tính năng đang phát triển"
+              title="Không tải được dữ liệu"
               message={error}
               onRetry={fetchRevenue}
             />
@@ -115,7 +111,7 @@ const Page = () => {
                     </div>
                   ))}
                   {report.revenueByClass.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">Chưa có dữ liệu lớp học</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">Chưa có doanh thu từ lớp học</p>
                   )}
                 </div>
               </CardContent>

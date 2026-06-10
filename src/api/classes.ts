@@ -82,6 +82,17 @@ export const getClassesByBranchApi = async (branchId: string): Promise<ClassDto[
   return response.json();
 };
 
+export const getClassesForStaffApi = async (): Promise<ClassDto[]> => {
+  const response = await apiFetch(`${API_URL}/staff-schedule`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || "Lấy danh sách lớp học cho nhân viên thất bại");
+  }
+  return response.json();
+};
+
 export const getClassByIdApi = async (id: string): Promise<ClassDto> => {
   const response = await apiFetch(`${API_URL}/${id}`);
   if (!response.ok) {
