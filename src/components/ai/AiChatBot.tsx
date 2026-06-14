@@ -12,9 +12,6 @@ import {
   PenLine,
   Plus,
   ChevronRight,
-  MapPin,
-  Clock,
-  CreditCard,
   ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,9 +27,11 @@ import {
   type AISuggestionResponse,
 } from "@/api/ai";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { Maximize2, Minimize2 } from "lucide-react";
+import { type SuggestionCardData, type BriefSuggestion, normalizeText, cleanAiText, buildBriefSuggestion } from "@/lib/aiUtils";
 
 type ChatRole = "user" | "assistant" | "system";
 
@@ -61,26 +60,7 @@ const AI_WIDGET_SIZE_KEY = "flexfit_ai_widget_size";
 const DEFAULT_WIDGET_SIZE = { width: 420, height: 650 };
 const MIN_WIDGET_SIZE = { width: 380, height: 480 };
 const AI_RESPONSE_STYLE_INSTRUCTION =
-  "Trả lời tối đa 150-200 từ. Không dùng markdown table, không dùng ###, không viết bài luận. Ưu tiên JSON nếu phù hợp: {\"summary\":\"...\",\"workoutPlan\":[\"...\",\"...\",\"...\"],\"classSuggestions\":[\"...\",\"...\",\"...\"],\"tips\":[\"...\",\"...\",\"...\"]}.";
-
-type SuggestionKind = "class" | "gym";
-
-interface SuggestionCardData {
-  id: string;
-  kind: SuggestionKind;
-  title: string;
-  subtitle: string;
-  image?: string;
-  creditCost?: number;
-  startTime?: string;
-  classId?: string;
-  gymId?: string;
-  branchId?: string;
-  routeState?: {
-    autoSelectName: string;
-    autoSelectGym: string;
-  };
-}
+  "Trả lời CỰC KỲ NGẮN GỌN (tối đa 150-200 từ), sử dụng gạch đầu dòng (bullet points). Tuyệt đối KHÔNG viết bài luận, KHÔNG dùng markdown table, KHÔNG dùng headers (###). Format ưu tiên: 1. Hôm nay nên tập gì, 2. Vì sao phù hợp, 3. Đề xuất lớp/gym, 4. Lời kêu gọi hành động (CTA). Ưu tiên JSON nếu phù hợp: {\"summary\":\"...\",\"workoutPlan\":[\"...\",\"...\",\"...\"],\"classSuggestions\":[\"...\",\"...\",\"...\"],\"tips\":[\"...\",\"...\",\"...\"]}.";
 
 function createMessage(role: ChatRole, content: string): ChatMessage {
   return {
@@ -93,12 +73,6 @@ function createMessage(role: ChatRole, content: string): ChatMessage {
 function readSuggestion(data: AISuggestionResponse): string {
   return typeof data?.suggestion === "string" ? data.suggestion.trim() : "";
 }
-
-const normalizeText = (value: string | undefined | null) =>
-  (value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
 
 const getClassStartLabel = (value?: string) => {
   if (!value) return "";
@@ -184,132 +158,6 @@ const buildGymCards = (branches: BranchDto[], suggestionText: string): Suggestio
         autoSelectGym: branch.branchName,
       },
     }));
-};
-
-interface BriefSuggestion {
-  title: string;
-  summary: string;
-  bullets: string[];
-  ctaLabel: string;
-  kind: "workout" | "classes" | "general";
-}
-
-const stripMarkdownLine = (line: string) =>
-  line
-    .replace(/^#{1,6}\s*/, "")
-    .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/\*(.*?)\*/g, "$1")
-    .replace(/`{1,3}/g, "")
-    .replace(/^[-*]\s*/, "")
-    .replace(/^\d+[.)]\s*/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const cleanAiText = (content: string) => {
-  return content
-    .replace(/```(?:json)?/gi, "")
-    .replace(/```/g, "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => {
-      if (!line) return false;
-      if (/^[-=_]{3,}$/.test(line)) return false;
-      if (/^\|(?:-|=|:|\s|\|)+\|?$/.test(line)) return false;
-      if (line.startsWith("|") && line.endsWith("|")) return false;
-      if (line.split("|").length >= 3) return false;
-      return true;
-    })
-    .map(stripMarkdownLine)
-    .filter(Boolean)
-    .join("\n");
-};
-
-const truncateText = (value: string, max = 120) => {
-  if (value.length <= max) return value;
-  return `${value.slice(0, max - 1).trim()}…`;
-};
-
-const uniqueShortBullets = (items: string[]) => {
-  const seen = new Set<string>();
-  return items
-    .map((item) => truncateText(stripMarkdownLine(item), 72))
-    .filter((item) => {
-      if (!item) return false;
-      const key = normalizeText(item);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 3);
-};
-
-const ensureBullets = (items: string[], fallback: string[]) => {
-  const merged = uniqueShortBullets([...items, ...fallback]);
-  return merged.slice(0, 3);
-};
-
-const parseJsonSuggestion = (content: string) => {
-  const trimmed = content.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-  const raw = jsonMatch?.[0] || trimmed;
-  try {
-    return JSON.parse(raw) as {
-      summary?: string;
-      workoutPlan?: string[];
-      classSuggestions?: string[];
-      tips?: string[];
-    };
-  } catch {
-    return null;
-  }
-};
-
-const buildBriefSuggestion = (content: string, suggestions?: SuggestionCardData[]): BriefSuggestion => {
-  const parsed = parseJsonSuggestion(content);
-  const cleaned = cleanAiText(content);
-  const lines = cleaned.split("\n").map(stripMarkdownLine).filter(Boolean);
-  const normalized = normalizeText(cleaned);
-  const hasClassSuggestions = Boolean(suggestions?.some((item) => item.kind === "class" || item.kind === "gym"));
-  const isClass = hasClassSuggestions || /\b(class|lop|yoga|hiit|boxing|pilates|zumba|circuit|gym|phong tap)\b/.test(normalized);
-  const isWorkout = !isClass && /\b(workout|lich tap|cardio|strength|suc manh|giam can|tang co)\b/.test(normalized);
-
-  const classBullets = uniqueShortBullets([
-    ...(suggestions?.map((item) => item.title) || []),
-    ...(parsed?.classSuggestions || []),
-  ]);
-  const workoutBullets = uniqueShortBullets([
-    ...(parsed?.workoutPlan || []),
-    ...(parsed?.tips || []),
-    ...lines.filter((line) => !line.toLowerCase().includes("summary")),
-  ]);
-
-  if (isClass) {
-    return {
-      title: "Top lớp phù hợp",
-      summary: truncateText(parsed?.summary || lines[0] || "Các lớp nổi bật được chọn theo gợi ý của AI và dữ liệu lịch học hiện có."),
-      bullets: ensureBullets(classBullets.length > 0 ? classBullets : lines, ["HIIT", "Boxing", "Circuit Training"]),
-      ctaLabel: "Khám phá lớp học",
-      kind: "classes",
-    };
-  }
-
-  if (isWorkout) {
-    return {
-      title: "Gợi ý lịch tập",
-      summary: truncateText(parsed?.summary || lines[0] || "Một kế hoạch ngắn gọn để bạn bắt đầu buổi tập hôm nay."),
-      bullets: ensureBullets(workoutBullets, ["Cardio + Strength", "Thời lượng khoảng 45 phút", "Khởi động kỹ và không tập quá sức"]),
-      ctaLabel: "Xem kế hoạch chi tiết",
-      kind: "workout",
-    };
-  }
-
-  return {
-    title: "AI gợi ý cho bạn",
-    summary: truncateText(parsed?.summary || lines[0] || "Một phản hồi ngắn từ FlexFit AI Coach."),
-    bullets: ensureBullets([...(parsed?.tips || []), ...lines], ["Tóm tắt ý chính", "Ưu tiên an toàn", "Xem chi tiết khi cần"]),
-    ctaLabel: "Xem chi tiết",
-    kind: "general",
-  };
 };
 
 function SuggestionCards({
@@ -481,10 +329,13 @@ function MessageContent({
   const lines = cleanText.split('\n').filter(l => l.trim().length > 0);
   const brief = buildBriefSuggestion(content, suggestions);
   const showSuggestionCards = Boolean(suggestions?.length && brief.kind === "classes");
-
+  
+  // Conditionally use 1 or 2 cols based on container context if possible, 
+  // but standard grid depends on parent. The AiChatBot parent gives it enough width, 
+  // but when squished we want it to adapt.
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <div className="space-y-4 w-full @container">
+      <div className="grid grid-cols-1 @[500px]:grid-cols-2 gap-3 w-full">
         <BriefSuggestionCard
           brief={brief}
           expanded={expanded}
@@ -548,6 +399,10 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const messagesRef = useRef<ChatMessage[]>(messages);
+  const isMobile = () => typeof window !== "undefined" && window.innerWidth < 768;
+  const [isMaximized, setIsMaximized] = useState(false);
+  const dragControls = useDragControls();
+
   const [widgetSize, setWidgetSize] = useState(() => {
     if (typeof window === "undefined") return DEFAULT_WIDGET_SIZE;
     try {
@@ -563,11 +418,83 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
     }
   });
 
+  const clampPosition = (pos: { x: number; y: number }, size: { width: number; height: number }) => {
+    if (typeof window === "undefined") return pos;
+    return {
+      x: Math.min(Math.max(pos.x, 16), window.innerWidth - size.width - 16),
+      y: Math.min(Math.max(pos.y, 16), window.innerHeight - size.height - 16),
+    };
+  };
+
+  const getDefaultPosition = (size: { width: number; height: number }) => {
+    if (typeof window === "undefined") return { x: 0, y: 0 };
+    return clampPosition({
+      x: window.innerWidth - size.width - 32,
+      y: window.innerHeight - size.height - 96
+    }, size);
+  };
+
+  const [widgetPosition, setWidgetPosition] = useState(() => {
+    let initialSize = DEFAULT_WIDGET_SIZE;
+    if (typeof window !== "undefined") {
+      try {
+        const savedSize = localStorage.getItem(AI_WIDGET_SIZE_KEY);
+        if (savedSize) {
+           const parsed = JSON.parse(savedSize);
+           initialSize = {
+             width: Math.max(MIN_WIDGET_SIZE.width, Number(parsed.width) || DEFAULT_WIDGET_SIZE.width),
+             height: Math.max(MIN_WIDGET_SIZE.height, Number(parsed.height) || DEFAULT_WIDGET_SIZE.height),
+           };
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    try {
+      const saved = localStorage.getItem("flexfit_ai_widget_position");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+          return clampPosition(parsed, initialSize);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    localStorage.removeItem("flexfit_ai_widget_position");
+    return getDefaultPosition(initialSize);
+  });
+
+  useEffect(() => {
+    if (!isOpen || isMobile() || isMaximized) return;
+    const handleResize = () => {
+      setWidgetPosition(prev => clampPosition(prev, widgetSize));
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isOpen, isMaximized, widgetSize]);
+
+  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number; y: number } }) => {
+    if (isMaximized || isMobile()) return;
+    setWidgetPosition((prev: { x: number; y: number }) => {
+      const next = clampPosition({ 
+        x: prev.x + info.offset.x, 
+        y: prev.y + info.offset.y 
+      }, widgetSize);
+      localStorage.setItem("flexfit_ai_widget_position", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleResetPosition = () => {
+    localStorage.removeItem("flexfit_ai_widget_position");
+    setWidgetPosition(getDefaultPosition(widgetSize));
+  };
+
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-
-  const isMobile = () => typeof window !== "undefined" && window.innerWidth < 768;
 
   useEffect(() => {
     if (!isOpen || isMobile()) return;
@@ -823,13 +750,35 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
         {isOpen && (
           <motion.div
             ref={widgetRef}
+            drag={!isMobile() && !isMaximized}
+            dragControls={dragControls}
+            dragListener={false}
+            dragMomentum={false}
+            onDragEnd={handleDragEnd}
+            dragConstraints={
+              typeof window !== "undefined"
+                ? {
+                    left: 16 - widgetPosition.x,
+                    right: (window.innerWidth - widgetSize.width - 16) - widgetPosition.x,
+                    top: 16 - widgetPosition.y,
+                    bottom: (window.innerHeight - widgetSize.height - 16) - widgetPosition.y,
+                  }
+                : undefined
+            }
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
+            animate={{ 
+              opacity: 1, 
+              scale: 1, 
+              x: 0, 
+              y: 0 
+            }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             style={
               isMobile()
                 ? undefined
+                : isMaximized
+                ? { width: "90vw", height: "90vh", resize: "none" }
                 : {
                     width: widgetSize.width,
                     height: widgetSize.height,
@@ -838,19 +787,33 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
                     maxWidth: "90vw",
                     maxHeight: "90vh",
                     resize: "both",
+                    position: "fixed",
+                    left: widgetPosition.x,
+                    top: widgetPosition.y,
                   }
             }
             className={cn(
-              "fixed z-[100] flex flex-col bg-[#000000] text-zinc-100 overflow-hidden border border-white/10 shadow-2xl rounded-2xl",
+              "fixed z-[100] flex flex-col bg-[#000000] text-zinc-100 border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.8)] rounded-2xl @container relative",
               isMobile() 
-                ? "inset-4 bottom-24 max-h-[calc(100vh-120px)]" 
-                : "bottom-24 right-8"
+                ? "inset-4 bottom-24 max-h-[calc(100vh-120px)] overflow-hidden" 
+                : "overflow-hidden"
             )}
           >
             {/* Main Area */}
-            <div className="flex min-h-0 flex-1 flex-col bg-black">
+            <div className="flex min-h-0 flex-1 flex-col bg-black h-full">
               {/* Header */}
-              <header className="flex items-center justify-between px-4 h-14 shrink-0 border-b border-white/10 bg-gradient-to-b from-black/80 to-transparent">
+              <header 
+                className={cn(
+                  "flex items-center justify-between px-4 h-14 shrink-0 border-b border-white/10 bg-gradient-to-b from-black/80 to-transparent",
+                  !isMobile() && !isMaximized && "cursor-grab active:cursor-grabbing"
+                )}
+                onPointerDown={(e) => {
+                  if (!isMobile() && !isMaximized) {
+                    dragControls.start(e);
+                  }
+                }}
+                onDoubleClick={handleResetPosition}
+              >
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#22c55e_0deg,#14b8a6_180deg,#3b82f6_360deg)] flex items-center justify-center p-0.5">
                     <div className="bg-black rounded-full h-full w-full flex items-center justify-center">
@@ -872,6 +835,17 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
+                  {!isMobile() && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-zinc-400 hover:text-white hover:bg-white/5 h-8 w-8 rounded-full hidden sm:flex"
+                      onClick={() => setIsMaximized(!isMaximized)}
+                      title={isMaximized ? "Thu nhỏ" : "Phóng to"}
+                    >
+                      {isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1051,6 +1025,15 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
                 </form>
               </div>
             </div>
+            
+            {/* Visual resize handle on desktop to make it obvious */}
+            {!isMobile() && !isMaximized && (
+              <div 
+                className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize opacity-50 flex items-end justify-end p-[2px] pointer-events-none"
+              >
+                <div className="w-[10px] h-[10px] border-r-2 border-b-2 border-zinc-500 rounded-br-[2px]" />
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

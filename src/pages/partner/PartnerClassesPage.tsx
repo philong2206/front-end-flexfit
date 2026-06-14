@@ -27,6 +27,15 @@ const normalizeClassStatus = (status?: string): ClassStatus => {
   return "Open";
 };
 
+const toLocalDatetimeString = (isoString?: string) => {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return "";
+  const tzOffsetMs = date.getTimezoneOffset() * 60000;
+  const localDate = new Date(date.getTime() - tzOffsetMs);
+  return localDate.toISOString().slice(0, 16);
+};
+
 const classStatusMeta: Record<ClassStatus, { label: string; className: string }> = {
   Open: {
     label: "Đang mở",
@@ -170,8 +179,31 @@ export default function PartnerClassesPage() {
       if (formDialog.mode === "create") {
         if (!formData.branchId || !branches.some((branch) => branch.branchId === formData.branchId)) {
           toast.error("Chi nhánh tạo lớp không thuộc đối tác hiện tại");
+          setFormLoading(false);
           return;
         }
+      }
+
+      if (!formData.startTime) throw new Error("Vui lòng chọn thời gian bắt đầu");
+      if (!formData.endTime) throw new Error("Vui lòng chọn thời gian kết thúc");
+      
+      const start = new Date(formData.startTime);
+      const end = new Date(formData.endTime);
+      const now = new Date();
+      
+      if (start < now) {
+        throw new Error("Thời gian bắt đầu không hợp lệ");
+      }
+      if (end <= start) {
+        throw new Error("Thời gian kết thúc phải sau thời gian bắt đầu");
+      }
+      
+      const durationMins = (end.getTime() - start.getTime()) / 60000;
+      if (durationMins < 15 || durationMins > 360) {
+        throw new Error("Thời lượng lớp học phải từ 15 phút đến 6 tiếng");
+      }
+
+      if (formDialog.mode === "create") {
         await createClassApi(formData as CreateClassRequest);
         toast.success("Tạo lớp học thành công!");
       } else if (formDialog.classId) {
@@ -517,8 +549,8 @@ export default function PartnerClassesPage() {
                 <Label>Thời gian bắt đầu *</Label>
                 <Input 
                   type="datetime-local"
-                  value={formData.startTime ? new Date(formData.startTime).toISOString().slice(0, 16) : ""} 
-                  onChange={(e) => setFormData({ ...formData, startTime: new Date(e.target.value).toISOString() })}
+                  value={toLocalDatetimeString(formData.startTime)} 
+                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value ? new Date(e.target.value).toISOString() : "" })}
                   className="bg-background border-white/10"
                 />
               </div>
@@ -526,8 +558,8 @@ export default function PartnerClassesPage() {
                 <Label>Thời gian kết thúc *</Label>
                 <Input 
                   type="datetime-local"
-                  value={formData.endTime ? new Date(formData.endTime).toISOString().slice(0, 16) : ""} 
-                  onChange={(e) => setFormData({ ...formData, endTime: new Date(e.target.value).toISOString() })}
+                  value={toLocalDatetimeString(formData.endTime)} 
+                  onChange={(e) => setFormData({ ...formData, endTime: e.target.value ? new Date(e.target.value).toISOString() : "" })}
                   className="bg-background border-white/10"
                 />
               </div>

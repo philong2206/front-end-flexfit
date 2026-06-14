@@ -11,6 +11,7 @@ import { getAllBranchesApi } from "@/api/branches";
 import { getAllClassesApi } from "@/api/classes";
 import { toast } from "sonner";
 import { normalizeApiError, isInsufficientCreditsError } from "@/lib/normalizeApiError";
+import { FITNESS_FALLBACK_IMAGE, resolveFitnessImage } from "@/lib/imageFallbacks";
 import {
   buildNext7DateTabs,
   buildSlotDateTime,
@@ -84,8 +85,7 @@ interface SelectedSlot {
 }
 
 const ALL_CATEGORY = "Tất cả";
-const CLASS_FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=1470&auto=format&fit=crop";
+const CLASS_FALLBACK_IMAGE = FITNESS_FALLBACK_IMAGE;
 
 export default function ExplorePage() {
   const { user } = useAuth();
@@ -159,7 +159,7 @@ export default function ExplorePage() {
             durationMinutes: 60,
             credits: branch.creditCost,
             type: "Gym",
-            image: branch.thumbnailUrl || CLASS_FALLBACK_IMAGE,
+            image: resolveFitnessImage(branch.thumbnailUrl || CLASS_FALLBACK_IMAGE),
             isOpenGym: true,
             
             startTime: undefined,
@@ -190,7 +190,7 @@ export default function ExplorePage() {
             durationMinutes,
             credits: cls.creditCost,
             type: cls.categoryName,
-            image: cls.thumbnailUrl || CLASS_FALLBACK_IMAGE,
+            image: resolveFitnessImage(cls.thumbnailUrl || CLASS_FALLBACK_IMAGE),
             isOpenGym: false,
             startTime: cls.startTime,
             endTime: cls.endTime,
@@ -461,7 +461,7 @@ export default function ExplorePage() {
                 ? `${formatTime(cls.openTime)} - ${formatTime(cls.closeTime)}`
                 : `${formatTime(cls.startTime)} - ${formatTime(cls.endTime)}`;
               
-              const isPastClass = !gym && cls.startTime ? new Date(cls.startTime) < new Date() : false;
+              const isPastClass = !gym && cls.endTime ? new Date(cls.endTime) < new Date() : false;
 
               return (
                 <motion.div 

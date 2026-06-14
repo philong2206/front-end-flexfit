@@ -11,6 +11,7 @@ export default function AdminPartnersPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -28,11 +29,12 @@ export default function AdminPartnersPage() {
   const fetchGyms = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const data = await getAllGymsApi();
       setGyms(data);
-    } catch (error) {
-      console.error("Lỗi khi tải danh sách phòng tập:", error);
-      toast.error("Không thể tải danh sách đối tác phòng tập");
+    } catch {
+      setGyms([]);
+      setLoadError("Không thể tải danh sách đối tác phòng tập");
     } finally {
       setLoading(false);
     }
@@ -68,8 +70,7 @@ export default function AdminPartnersPage() {
           await changeGymStatusApi(id, status);
           setGyms(prev => prev.map(g => g.gymId === id ? { ...g, status } : g));
           toast.success(status === "Approved" ? "Đã duyệt/kích hoạt đối tác thành công!" : "Đã tạm dừng/từ chối đối tác!");
-        } catch (error) {
-          console.error("Lỗi khi cập nhật trạng thái:", error);
+        } catch {
           toast.error("Cập nhật trạng thái thất bại");
         }
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -91,8 +92,7 @@ export default function AdminPartnersPage() {
           await deleteGymApi(id);
           setGyms(prev => prev.filter(g => g.gymId !== id));
           toast.success("Đã xóa đối tác thành công!");
-        } catch (error) {
-          console.error("Lỗi khi xóa đối tác:", error);
+        } catch {
           toast.error("Xóa đối tác thất bại");
         }
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -194,6 +194,10 @@ export default function AdminPartnersPage() {
                 {loading ? (
                   <tr>
                     <td colSpan={6} className="text-center py-8">Đang tải dữ liệu...</td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-red-400">{loadError}</td>
                   </tr>
                 ) : filteredGyms.length === 0 ? (
                   <tr>

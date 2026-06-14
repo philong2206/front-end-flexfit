@@ -56,8 +56,8 @@ export default function LoginPage() {
             setIsLoading(false);
             return;
           }
-        } catch (e) {
-          console.error("Không thể lấy thông tin user", e);
+        } catch {
+          userProfile = {};
         }
       }
       
@@ -114,8 +114,8 @@ export default function LoginPage() {
             setIsLoading(false);
             return;
           }
-        } catch (e) {
-          console.error("Không thể lấy thông tin user", e);
+        } catch {
+          userProfile = {};
         }
       }
       

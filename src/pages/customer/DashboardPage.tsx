@@ -22,6 +22,8 @@ import {
   getWorkoutSuggestionApi,
   type AISuggestionResponse,
 } from "@/api/ai";
+import { buildBriefSuggestion, cleanAiText } from "@/lib/aiUtils";
+import { ChevronRight, CalendarDays, Dumbbell, ExternalLink } from "lucide-react";
 
 interface AiRecommendation {
   id: "workout" | "classes";
@@ -331,19 +333,13 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 items-start">
             {aiRecommendations.map((recommendation) => (
-              <Card key={recommendation.id} className="border-white/5 bg-black/40">
-                <CardContent className="p-5">
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <h4 className="font-semibold text-white">{recommendation.title}</h4>
-                    <span className="shrink-0 rounded-md bg-primary/20 px-2.5 py-1 text-xs font-medium text-primary">
-                      AI
-                    </span>
-                  </div>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{recommendation.content}</p>
-                </CardContent>
-              </Card>
+              <DashboardAiCard 
+                key={recommendation.id} 
+                recommendation={recommendation} 
+                onOpenCoach={openAiCoach} 
+              />
             ))}
           </div>
         )}
@@ -354,4 +350,80 @@ export default function DashboardPage() {
 
 function MessageIcon() {
   return <Sparkles className="h-4 w-4" />;
+}
+
+function DashboardAiCard({ recommendation, onOpenCoach }: { recommendation: AiRecommendation, onOpenCoach: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const navigate = useNavigate();
+  const brief = buildBriefSuggestion(recommendation.content, []); // empty suggestions for now on dashboard
+  const lines = cleanAiText(recommendation.content).split('\n').filter(l => l.trim().length > 0);
+  const Icon = brief.kind === "classes" ? CalendarDays : brief.kind === "workout" ? Dumbbell : Sparkles;
+  
+  return (
+    <Card className="border-white/10 bg-[#18181b] overflow-hidden flex flex-col shadow-lg transition-all duration-300 hover:border-white/20">
+      <CardContent className="p-5 flex-1 flex flex-col">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+              <Icon className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white">{brief.title}</h4>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-primary">AI Gợi ý</span>
+            </div>
+          </div>
+          <span className="rounded-full bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-zinc-300">
+            Hôm nay
+          </span>
+        </div>
+        
+        <p className="mb-4 text-xs leading-relaxed text-zinc-400 line-clamp-2 min-h-[36px]">
+          {brief.summary}
+        </p>
+        
+        <ul className="mb-5 space-y-2.5 flex-1">
+          {brief.bullets.slice(0, 3).map((bullet, idx) => (
+            <li key={idx} className="flex gap-2 text-xs leading-relaxed text-zinc-300">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+              <span className="line-clamp-2">{bullet}</span>
+            </li>
+          ))}
+        </ul>
+        
+        <div className="flex flex-col gap-2 sm:flex-row mt-auto">
+          <Button
+            type="button"
+            className="h-9 flex-1 rounded-xl bg-primary text-xs font-bold text-black hover:bg-orange-400"
+            onClick={() => brief.kind === 'classes' ? navigate('/explore') : onOpenCoach()}
+          >
+            {brief.ctaLabel}
+            {brief.kind === 'classes' ? <ExternalLink className="ml-1 h-3.5 w-3.5" /> : <ChevronRight className="ml-1 h-3.5 w-3.5" />}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-9 rounded-xl border border-white/10 px-3 text-xs text-zinc-300 hover:bg-white/10 hover:text-white"
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? "Thu gọn" : "Xem chi tiết"}
+          </Button>
+        </div>
+      </CardContent>
+      
+      {/* Expanded content area */}
+      {expanded && lines.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="border-t border-white/10 bg-black/40 px-5 py-4 max-h-[220px] overflow-y-auto"
+        >
+          <div className="space-y-2">
+             {lines.map((line, i) => (
+                <p key={i} className="text-xs leading-relaxed text-zinc-400">{line}</p>
+             ))}
+          </div>
+        </motion.div>
+      )}
+    </Card>
+  );
 }

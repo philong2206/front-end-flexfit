@@ -31,20 +31,30 @@ export function parseJwt(token: string) {
   }
 }
 
+function extractRoleNames(value: unknown): string[] {
+  if (!value) return [];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(extractRoleNames);
+  if (typeof value === "object") {
+    const role = value as Record<string, unknown>;
+    return [role.role, role.roleName, role.name, role.roles, role.userRoles].flatMap(extractRoleNames);
+  }
+  return [];
+}
+
 export function determineUserRole(email: string, payload?: Record<string, unknown>): "admin" | "partner" | "staff" | "member" {
   // 1. Try to get role from JWT payload first (most reliable)
   if (payload) {
     // Check standard role claim
     const jwtRole = payload["role"] || payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
-    if (jwtRole) {
-      const roleStr = String(jwtRole).toLowerCase();
-      
-      // Map exact DB roles
-      if (roleStr === "admin") return "admin";
-      if (roleStr === "gympartner" || roleStr === "partner") return "partner";
-      if (roleStr === "staff") return "staff";
-      if (roleStr === "member" || roleStr === "user") return "member";
-    }
+    const roleNames = extractRoleNames(jwtRole).map((role) => role.trim().toLowerCase());
+
+    // Map exact DB roles. If Member is mixed with an operational role, keep the least-privileged
+    // member route instead of accidentally elevating access from ambiguous DB data.
+    if (roleNames.includes("admin")) return "admin";
+    if (roleNames.includes("member") || roleNames.includes("user")) return "member";
+    if (roleNames.includes("staff")) return "staff";
+    if (roleNames.includes("gympartner") || roleNames.includes("partner")) return "partner";
   }
 
   // 2. Fallback to email-based detection (less reliable)

@@ -5,6 +5,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -20,24 +21,27 @@ export default function AdminDashboard() {
 
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
+  const [logsError, setLogsError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchGyms = async () => {
       try {
         const data = await getAllGymsApi();
         setGyms(data);
-      } catch (error) {
-        console.error("Lỗi khi tải gyms:", error);
+      } catch {
+        setGyms([]);
       }
     };
 
     const fetchLogs = async () => {
       try {
         setLoadingLogs(true);
+        setLogsError(null);
         const logData = await getSystemLogsApi({ pageSize: 5 });
         setSystemLogs(logData.logs || []);
       } catch (error) {
-        console.error("Lỗi khi tải logs:", error);
+        setSystemLogs([]);
+        setLogsError(error instanceof Error ? error.message : "Không tải được nhật ký hệ thống.");
       } finally {
         setLoadingLogs(false);
       }
@@ -52,8 +56,7 @@ export default function AdminDashboard() {
       .then((data) => {
         setDashboardStats(data);
       })
-      .catch((error) => {
-        console.error("Loi khi tai thong ke admin:", error);
+      .catch(() => {
         setDashboardStats(null);
         setStatsError(true);
       })
@@ -101,8 +104,8 @@ export default function AdminDashboard() {
           totalPartners: dashboardStats.totalPartners === null ? null : dashboardStats.totalPartners + 1
         });
       }
-    } catch (error) {
-      console.error("Lỗi khi duyệt:", error);
+    } catch {
+      setStatsError(true);
     }
   };
 
@@ -110,8 +113,8 @@ export default function AdminDashboard() {
     try {
       await changeGymStatusApi(id, "Rejected");
       setGyms(gyms.map(g => g.gymId === id ? { ...g, status: "Rejected" } : g));
-    } catch (error) {
-      console.error("Lỗi khi từ chối:", error);
+    } catch {
+      setStatsError(true);
     }
   };
 
@@ -375,6 +378,15 @@ export default function AdminDashboard() {
                            <Skeleton className="h-8 w-full mb-2 bg-white/10" />
                            <Skeleton className="h-8 w-full mb-2 bg-white/10" />
                            <Skeleton className="h-8 w-full mb-2 bg-white/10" />
+                        </td>
+                      </tr>
+                    ) : logsError ? (
+                      <tr>
+                        <td colSpan={5} className="py-8">
+                          <ErrorState
+                            title="Không tải được nhật ký hệ thống"
+                            message={logsError}
+                          />
                         </td>
                       </tr>
                     ) : systemLogs.length === 0 ? (

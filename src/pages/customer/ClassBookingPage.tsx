@@ -13,6 +13,7 @@ import { getAllClassesApi } from "@/api/classes";
 import { toast } from "sonner";
 import { isClassStartInPast } from "@/lib/gymTimeSlots";
 import { isInsufficientCreditsError, normalizeApiError } from "@/lib/normalizeApiError";
+import { FITNESS_FALLBACK_IMAGE, resolveFitnessImage } from "@/lib/imageFallbacks";
 
 const SESSION_SLOT_REMAINING_KEY = "flexfit_class_slot_remaining";
 
@@ -150,7 +151,7 @@ export default function ClassBookingPage() {
             slots: cls.capacity,
             totalSlots: cls.capacity,
             type: cls.categoryName,
-            image: cls.thumbnailUrl || "https://images.unsplash.com/photo-1599901860904-17e6ed7083a0?q=80&w=1470&auto=format&fit=crop",
+            image: resolveFitnessImage(cls.thumbnailUrl || FITNESS_FALLBACK_IMAGE),
             startTime: cls.startTime,
             endTime: cls.endTime,
             durationMins,

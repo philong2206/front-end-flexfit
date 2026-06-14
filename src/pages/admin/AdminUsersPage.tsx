@@ -11,6 +11,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -28,11 +29,12 @@ export default function AdminUsersPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const data = await getAllUsersApi();
       setUsers(data);
-    } catch (error) {
-      console.error("Lỗi khi tải danh sách người dùng:", error);
-      toast.error("Không thể tải danh sách người dùng");
+    } catch {
+      setUsers([]);
+      setLoadError("Không thể tải danh sách người dùng");
     } finally {
       setLoading(false);
     }
@@ -64,8 +66,7 @@ export default function AdminUsersPage() {
           await changeUserStatusApi(id, !currentStatus);
           setUsers(users.map(u => u.userId === id ? { ...u, isActive: !currentStatus } : u));
           toast.success(currentStatus ? "Đã tạm khóa người dùng!" : "Đã mở khóa người dùng thành công!");
-        } catch (error) {
-          console.error("Lỗi khi đổi trạng thái:", error);
+        } catch {
           toast.error("Thay đổi trạng thái thất bại");
         }
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -87,8 +88,7 @@ export default function AdminUsersPage() {
           await deleteUserApi(id);
           setUsers(users.filter(u => u.userId !== id));
           toast.success("Đã xóa tài khoản vĩnh viễn!");
-        } catch (error) {
-          console.error("Lỗi khi xóa người dùng:", error);
+        } catch {
           toast.error("Xóa tài khoản thất bại");
         }
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -145,6 +145,10 @@ export default function AdminUsersPage() {
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="text-center py-8">Đang tải dữ liệu...</td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-8 text-red-400">{loadError}</td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>

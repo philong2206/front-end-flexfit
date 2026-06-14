@@ -1,6 +1,5 @@
 import { getAllUsersApi } from "./users";
 import { getAllGymsApi } from "./gyms";
-import { getPartnerGymBookingsApi, getPartnerClassBookingsApi } from "./bookings";
 import { getPackagesApi } from "./payment";
 
 export interface AdminDashboardResponse {
@@ -100,8 +99,8 @@ export const getAdminDashboardApi = async (): Promise<AdminDashboardResponse> =>
     const res = await getAllUsersApi();
     users = unwrapResponse(res);
     usersLoaded = true;
-  } catch (e) {
-    console.error("Failed to fetch users:", e);
+  } catch {
+    // Keep null totals when the users endpoint is unavailable.
   }
 
   let gyms: unknown[] = [];
@@ -110,29 +109,19 @@ export const getAdminDashboardApi = async (): Promise<AdminDashboardResponse> =>
     const res = await getAllGymsApi();
     gyms = unwrapResponse(res);
     gymsLoaded = true;
-  } catch (e) {
-    console.error("Failed to fetch gyms:", e);
+  } catch {
+    // Keep null totals when the gyms endpoint is unavailable.
   }
 
   let packages: unknown[] = [];
   try {
     const res = await getPackagesApi();
     packages = unwrapResponse(res);
-  } catch (e) {
-    console.error("Failed to fetch packages:", e);
+  } catch {
+    // Keep package chart empty when the payment packages endpoint is unavailable.
   }
 
-  let totalBookings: number | null = null;
-  try {
-    const [gymBookings, classBookings] = await Promise.all([
-      getPartnerGymBookingsApi(),
-      getPartnerClassBookingsApi()
-    ]);
-
-    totalBookings = unwrapResponse(gymBookings).length + unwrapResponse(classBookings).length;
-  } catch (e) {
-    console.error("Failed to fetch bookings:", e);
-  }
+  const totalBookings: number | null = null;
 
   const totalUsers = usersLoaded ? users.length : null;
   const hasRoleData = usersLoaded && users.some(hasAnyRoleData);

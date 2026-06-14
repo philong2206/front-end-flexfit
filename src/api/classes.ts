@@ -103,16 +103,35 @@ export const getClassByIdApi = async (id: string): Promise<ClassDto> => {
 };
 
 export const createClassApi = async (data: CreateClassRequest): Promise<{ message: string; classId: string }> => {
+  console.log("CREATE CLASS PAYLOAD:", data);
+
   const response = await apiFetch(API_URL, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify(data),
   });
+
+  const result = await response.json().catch(() => ({}));
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || errorData.Message || "Tạo lớp học thất bại");
+    console.error("CREATE CLASS ERROR:", result);
+
+    const validationErrors = result.errors
+      ? Object.entries(result.errors)
+          .map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`)
+          .join("\n")
+      : "";
+
+    throw new Error(
+      result.message ||
+      result.Message ||
+      result.title ||
+      validationErrors ||
+      "Tạo lớp học thất bại"
+    );
   }
-  return response.json();
+
+  return result;
 };
 
 export const updateClassApi = async (id: string, data: UpdateClassRequest): Promise<{ message: string }> => {

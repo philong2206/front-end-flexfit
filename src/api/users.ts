@@ -1,3 +1,5 @@
+import { apiFetch } from "@/lib/apiFetch";
+
 export const API_URL = "/api/users";
 
 export interface UserDto {
@@ -19,7 +21,7 @@ export interface UpdateUserRequest {
 }
 
 export const getAllUsersApi = async (): Promise<UserDto[]> => {
-  const response = await fetch(API_URL);
+  const response = await apiFetch(API_URL);
   if (!response.ok) {
     throw new Error("Lấy danh sách người dùng thất bại");
   }
@@ -27,7 +29,7 @@ export const getAllUsersApi = async (): Promise<UserDto[]> => {
 };
 
 export const getUserByIdApi = async (id: string): Promise<UserDto> => {
-  const response = await fetch(`${API_URL}/${id}`);
+  const response = await apiFetch(`${API_URL}/${id}`);
   if (!response.ok) {
     throw new Error("Không tìm thấy người dùng");
   }
@@ -35,7 +37,7 @@ export const getUserByIdApi = async (id: string): Promise<UserDto> => {
 };
 
 export const updateUserApi = async (id: string, data: UpdateUserRequest) => {
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`${API_URL}/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -48,7 +50,7 @@ export const updateUserApi = async (id: string, data: UpdateUserRequest) => {
 };
 
 export const changeUserStatusApi = async (id: string, isActive: boolean) => {
-  const response = await fetch(`${API_URL}/${id}/status`, {
+  const response = await apiFetch(`${API_URL}/${id}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(isActive),
@@ -61,7 +63,7 @@ export const changeUserStatusApi = async (id: string, isActive: boolean) => {
 };
 
 export const deleteUserApi = async (id: string) => {
-  const response = await fetch(`${API_URL}/${id}`, {
+  const response = await apiFetch(`${API_URL}/${id}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -77,12 +79,10 @@ export interface UserRoleRequestDto {
 }
 
 export const assignRoleApi = async (data: UserRoleRequestDto) => {
-  const token = localStorage.getItem("access_token");
-  const response = await fetch(`${API_URL}/assign-role`, {
+  const response = await apiFetch(`${API_URL}/assign-role`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(data),
   });
@@ -94,12 +94,8 @@ export const assignRoleApi = async (data: UserRoleRequestDto) => {
 };
 
 export const revokeRoleApi = async (userId: string, roleName: string) => {
-  const token = localStorage.getItem("access_token");
-  const response = await fetch(`${API_URL}/revoke-role?userId=${userId}&roleName=${roleName}`, {
+  const response = await apiFetch(`${API_URL}/revoke-role?userId=${userId}&roleName=${roleName}`, {
     method: "DELETE",
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
@@ -107,4 +103,3 @@ export const revokeRoleApi = async (userId: string, roleName: string) => {
   }
   return response.json();
 };
-
