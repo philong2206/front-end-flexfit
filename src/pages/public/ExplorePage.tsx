@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, MapPin, Star, Filter, Calendar, Clock, X, CheckCircle, Loader2, CreditCard } from "lucide-react";
@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { bookClassApi, bookGymSessionApi, getMyGymBookingsApi, getMyClassBookingsApi } from "@/api/bookings";
+import { bookClassApi, bookGymSessionApi, getMyGymBookingsApi, getMyClassBookingsApi, getPromotionPreviewApi, type PromotionPreviewResponse } from "@/api/bookings";
 import { getAllBranchesApi } from "@/api/branches";
 import { getAllClassesApi } from "@/api/classes";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ interface ExploreSession {
   name: string;
   gym: string;
   branchId: string;
+  gymId?: string;
   location: string;
   rating?: number;
   openHours?: string;
@@ -106,6 +107,11 @@ export default function ExplorePage() {
   const [sessions, setSessions] = useState<ExploreSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [bookingError, setBookingError] = useState<string | null>(null); // NEW: track booking error
+  const [promotionPreview, setPromotionPreview] = useState<PromotionPreviewResponse | null>(null);
+  const [isLoadingPromotionPreview, setIsLoadingPromotionPreview] = useState(false);
+
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   const dateTabs = useMemo(() => buildNext7DateTabs(), []);
   const categories = useMemo(
@@ -117,6 +123,7 @@ export default function ExplorePage() {
     (cls: ExploreSession) => {
       setBookingStep("pick-time");
       setSelectedSlot(null);
+      setPromotionPreview(null);
       setPickerDateStr(dateTabs[0]?.dateStr ?? "");
       setBookingModal({ isOpen: true, classData: cls });
     },
@@ -129,7 +136,44 @@ export default function ExplorePage() {
     setSelectedSlot(null);
     setIsBooked(false);
     setBookingError(null); // NEW: clear error
+    setPromotionPreview(null);
   }, []);
+
+  useEffect(() => {
+    if (!bookingModal.isOpen || bookingStep !== "confirm" || !bookingModal.classData) {
+      if (bookingStep !== "confirm") setPromotionPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+    const originalCredit = bookingModal.classData.credits;
+    const loadPreview = async () => {
+      try {
+        setIsLoadingPromotionPreview(true);
+        const preview = await getPromotionPreviewApi(originalCredit);
+        if (!cancelled) setPromotionPreview(preview);
+      } catch {
+        if (!cancelled) {
+          setPromotionPreview({
+            originalCredit,
+            discountPercent: 0,
+            discountCredit: 0,
+            finalCredit: originalCredit,
+            promotionId: null,
+            promotionTitle: null,
+            hasPromotion: false,
+          });
+        }
+      } finally {
+        if (!cancelled) setIsLoadingPromotionPreview(false);
+      }
+    };
+
+    loadPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingModal.isOpen, bookingModal.classData, bookingStep]);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -151,6 +195,7 @@ export default function ExplorePage() {
             name: `Open Gym - ${branch.branchName}`,
             gym: branch.branchName,
             branchId: branch.branchId,
+            gymId: branch.gymId,
             location: [branch.address, branch.district, branch.city].filter(Boolean).join(", "),
             openHours,
             openTime: branch.openTime,
@@ -223,6 +268,37 @@ export default function ExplorePage() {
     loadBranchesAndSessions();
     return () => ac.abort();
   }, [location.state, openBookingPicker]);
+
+  useEffect(() => {
+    if (isLoadingSessions || sessions.length === 0) return;
+    
+    const state = location.state as { selectedGymId?: string; selectedBranchId?: string; autoSelectName?: string; autoSelectGym?: string } | null;
+    if (state?.selectedGymId || state?.selectedBranchId) {
+      const matched = sessions.find(s => 
+        s.isOpenGym && 
+        ((state.selectedBranchId && s.branchId === state.selectedBranchId) || 
+         (state.selectedGymId && s.gymId === state.selectedGymId))
+      );
+      
+      if (matched) {
+        setActiveCategory(ALL_CATEGORY);
+        setSearchQuery("");
+        
+        setTimeout(() => {
+          const el = cardRefs.current[matched.id];
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setHighlightedId(matched.id);
+            setTimeout(() => setHighlightedId(null), 3000);
+            
+            openBookingPicker(matched);
+          }
+        }, 150);
+        
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [isLoadingSessions, sessions, location.state, openBookingPicker]);
 
   const hourSlotsForPicker = useMemo(() => {
     const cls = bookingModal.classData;
@@ -346,6 +422,8 @@ export default function ExplorePage() {
         return;
       }
 
+      let bookingResult: any;
+
       if (isOpenGym(bookingModal.classData)) {
         // Enforce exact explicit payload
         const payload = {
@@ -355,12 +433,14 @@ export default function ExplorePage() {
           endTime: endTimeStr
         };
         console.log("Booking Payload:", JSON.stringify(payload, null, 2));
-        await bookGymSessionApi(payload);
+        bookingResult = await bookGymSessionApi(payload);
       } else if (bookingModal.classData.classId) {
-        await bookClassApi({ classId: bookingModal.classData.classId });
+        bookingResult = await bookClassApi({ classId: bookingModal.classData.classId });
       } else {
         throw new Error("Lớp học thiếu mã lớp từ backend");
       }
+
+      const usedCredit = Number(bookingResult?.data?.creditUsed ?? bookingResult?.Data?.CreditUsed ?? promotionPreview?.finalCredit ?? bookingModal.classData.credits);
 
       if (isOpenGym(bookingModal.classData) && selectedSlot) {
         recordSlotBooking(
@@ -373,7 +453,7 @@ export default function ExplorePage() {
 
       window.dispatchEvent(new Event("wallet-update"));
       window.dispatchEvent(new Event("notifications:refresh"));
-      toast.success("Đặt chỗ thành công!");
+      toast.success(`Đặt chỗ thành công! Đã dùng ${usedCredit} Credit.`);
       setIsBooked(true);
       setTimeout(() => {
         closeBookingModal();
@@ -471,6 +551,8 @@ export default function ExplorePage() {
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.3, delay: i * 0.05 }}
                   key={cls.id}
+                  ref={(el) => { cardRefs.current[cls.id] = el as HTMLDivElement | null; }}
+                  className={cn("rounded-xl transition-all duration-700", highlightedId === cls.id ? "ring-4 ring-primary shadow-[0_0_30px_rgba(249,115,22,0.8)] scale-[1.02] z-10" : "")}
                 >
                   <Card className="overflow-hidden group hover:border-primary/50 transition-all duration-500 bg-secondary flex flex-col h-full shadow-lg relative">
                     {/* PAST CLASS OVERLAY */}
@@ -791,9 +873,30 @@ export default function ExplorePage() {
                             <span className="text-primary font-bold text-right">{selectedSlot?.label}</span>
                           </div>
                           <div className="h-px bg-white/5 my-2 w-full" />
-                          <div className="flex justify-between items-center">
-                            <span className="text-muted-foreground">Chi phí</span>
-                            <span className="text-primary font-bold">{bookingModal.classData.credits} Credit</span>
+                          <div className="space-y-2">
+                            {promotionPreview?.hasPromotion ? (
+                              <>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-muted-foreground">Chi phí gốc</span>
+                                  <span className="text-white font-medium">{promotionPreview.originalCredit} Credit</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-muted-foreground">Khuyến mãi</span>
+                                  <span className="text-green-400 font-semibold">{promotionPreview.discountPercent}% OFF</span>
+                                </div>
+                                <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                                  <span className="text-muted-foreground">Còn lại</span>
+                                  <span className="text-primary font-bold">{promotionPreview.finalCredit} Credit</span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex justify-between items-center">
+                                <span className="text-muted-foreground">Chi phí</span>
+                                <span className="text-primary font-bold">
+                                  {isLoadingPromotionPreview ? "Đang kiểm tra..." : `${bookingModal.classData.credits} Credit`}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
 

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { QrCode, Search, CheckCircle, Loader2, Camera, Upload, Keyboard, X, ShieldAlert, User, Calendar, Clock, MapPin, Tag, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { checkInGymApi, checkInClassApi, getLogsForManagerApi, type CheckInLogDto } from "@/api/checkInLog";
-import { getPartnerGymBookingsApi, getPartnerClassBookingsApi } from "@/api/bookings";
+import { getStaffCheckInBookingsApi } from "@/api/bookings";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { Badge } from "@/components/ui/badge";
@@ -132,10 +132,7 @@ export default function StaffCheckInPage() {
   const fetchAllBookings = async () => {
     try {
       setIsBookingsLoading(true);
-      const [gymRes, classRes] = await Promise.all([
-        getPartnerGymBookingsApi().catch(() => []),
-        getPartnerClassBookingsApi().catch(() => [])
-      ]);
+      const bookingsRes = await getStaffCheckInBookingsApi().catch(() => []);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const normalizeArray = (res: any) => {
@@ -146,17 +143,14 @@ export default function StaffCheckInPage() {
         return [];
       };
 
-      const gymArray = normalizeArray(gymRes);
-      const classArray = normalizeArray(classRes);
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const gymBookings = gymArray.map((b: any) => ({ ...b, _type: "GYM" }));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const classBookings = classArray.map((b: any) => ({ ...b, _type: "CLASS" }));
-      const combined = [...gymBookings, ...classBookings];
+      const combined = normalizeArray(bookingsRes).map((b: any) => ({
+        ...b,
+        _type: String(b.bookingType || b.type || b._type || "").toUpperCase()
+      }));
 
       if (import.meta.env.DEV) {
-        console.log("API RESPONSE", { gymRes, classRes });
+        console.log("API RESPONSE", { bookingsRes });
         console.log("SET BOOKINGS", combined);
       }
 

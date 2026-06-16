@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { loginApi, googleLoginApi } from "@/api/auth";
 import { getUserByIdApi, type UserDto } from "@/api/users";
-import { parseJwt, determineUserRole } from "@/lib/utils";
+import { parseJwt, determineUserRole, getPrimaryRole, getRoleNamesFromPayload } from "@/lib/utils";
 import { GoogleLogin } from "@react-oauth/google";
 
 export default function LoginPage() {
@@ -62,7 +62,14 @@ export default function LoginPage() {
       }
       
       const userEmail = userProfile?.email || payload?.email || response.email || email;
-      const role = determineUserRole(userEmail, payload);
+      const roles = Array.isArray(response.roles)
+        ? response.roles
+        : Array.isArray(response.Roles)
+          ? response.Roles
+          : getRoleNamesFromPayload(payload);
+      const role = roles.length > 0 ? getPrimaryRole(roles) : determineUserRole(userEmail, payload);
+      console.log("LOGIN ROLES:", roles);
+      console.log("PRIMARY ROLE:", role);
       
       const user = {
         userId: userId || response.userId || response.user?.id || response.id,
@@ -119,8 +126,15 @@ export default function LoginPage() {
         }
       }
       
-      const userEmail = userProfile?.email || payload?.email || response.email || "google@example.com";
-      const role = determineUserRole(userEmail, payload);
+      const userEmail = userProfile?.email || payload?.email || response.email || "";
+      const roles = Array.isArray(response.roles)
+        ? response.roles
+        : Array.isArray(response.Roles)
+          ? response.Roles
+          : getRoleNamesFromPayload(payload);
+      const role = roles.length > 0 ? getPrimaryRole(roles) : determineUserRole(userEmail, payload);
+      console.log("LOGIN ROLES:", roles);
+      console.log("PRIMARY ROLE:", role);
       
       const user = {
         userId: userId || response.userId || response.user?.id || response.id,
@@ -247,7 +261,7 @@ export default function LoginPage() {
                     type="email" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@example.com" 
+                    placeholder="name@email.com" 
                     className="w-full bg-black/50 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                   />
                 </div>

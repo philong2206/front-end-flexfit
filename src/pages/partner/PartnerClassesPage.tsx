@@ -8,32 +8,41 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ClassDto, CreateClassRequest, UpdateClassRequest } from "@/api/classes";
-import { 
+import {
   getClassByIdApi,
-  createClassApi, 
-  updateClassApi, 
+  createClassApi,
+  updateClassApi,
   changeClassStatusApi,
   deleteClassApi
 } from "@/api/classes";
+import { getAllCategoriesApi, type CategoryDto } from "@/api/categories";
 import type { BranchDto } from "@/api/branches";
 import { getPartnerClasses, getPartnerBranches } from "@/services/partnerApi";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 type ClassStatus = "Open" | "Cancelled" | "Completed";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 const normalizeClassStatus = (status?: string): ClassStatus => {
   if (status === "Open" || status === "Cancelled" || status === "Completed") return status;
   return "Open";
 };
 
-const toLocalDatetimeString = (isoString?: string) => {
-  if (!isoString) return "";
-  const date = new Date(isoString);
-  if (isNaN(date.getTime())) return "";
-  const tzOffsetMs = date.getTimezoneOffset() * 60000;
-  const localDate = new Date(date.getTime() - tzOffsetMs);
-  return localDate.toISOString().slice(0, 16);
+
+const splitDateTimeToInputs = (isoString?: string) => {
+  if (!isoString) return { date: "", time: "" };
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return { date: "", time: "" };
+  const date = d.toLocaleDateString('en-CA');
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return { date, time };
+};
+
+const combineDateAndTime = (date: string, time: string) => {
+  if (!date || !time) return "";
+  return `${date}T${time}:00`;
 };
 
 const classStatusMeta: Record<ClassStatus, { label: string; className: string }> = {
@@ -54,26 +63,31 @@ const classStatusMeta: Record<ClassStatus, { label: string; className: string }>
 export default function PartnerClassesPage() {
   const [classes, setClasses] = useState<ClassDto[]>([]);
   const [branches, setBranches] = useState<BranchDto[]>([]);
+  const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Dialogs
   const [detailDialog, setDetailDialog] = useState<{ open: boolean; classId: string | null }>({ open: false, classId: null });
   const [detailData, setDetailData] = useState<ClassDto | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  
-  const [formDialog, setFormDialog] = useState<{ open: boolean; mode: "create" | "edit"; classId: string | null }>({ 
-    open: false, 
-    mode: "create", 
-    classId: null 
+
+  const [formDialog, setFormDialog] = useState<{ open: boolean; mode: "create" | "edit"; classId: string | null }>({
+    open: false,
+    mode: "create",
+    classId: null
   });
-  const [formData, setFormData] = useState<Partial<CreateClassRequest & UpdateClassRequest>>({});
+  const [formData, setFormData] = useState<Partial<CreateClassRequest & UpdateClassRequest> & {
+    startDate?: string;
+    startTimeStr?: string;
+    endDate?: string;
+    endTimeStr?: string;
+  }>({});
   const [formLoading, setFormLoading] = useState(false);
 
   // Delete modal state
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, classId: string | null }>({ open: false, classId: null });
-
 
   // Fetch partner-owned branches and classes
   const fetchClasses = async () => {
@@ -81,8 +95,12 @@ export default function PartnerClassesPage() {
       setLoading(true);
       setError(null);
 
-      const partnerBranches = await getPartnerBranches();
+      const [partnerBranches, categoriesData] = await Promise.all([
+        getPartnerBranches(),
+        getAllCategoriesApi().catch(() => [])
+      ]);
       setBranches(partnerBranches);
+      setCategories(categoriesData);
 
       const selectedBranchBelongsToPartner =
         selectedBranch === "all" || partnerBranches.some((branch: BranchDto) => branch.branchId === selectedBranch);
@@ -128,13 +146,15 @@ export default function PartnerClassesPage() {
       return;
     }
     setFormData({
-      branchId: branches[0]?.branchId || "",
+      branchId: branches.length === 1 ? branches[0].branchId : (branches[0]?.branchId || ""),
       categoryId: "",
       className: "",
       description: "",
       coachName: "",
-      startTime: "",
-      endTime: "",
+      startDate: "",
+      startTimeStr: "",
+      endDate: "",
+      endTimeStr: "",
       capacity: 20,
       creditCost: 1,
       difficultyLevel: "Beginner",
@@ -150,13 +170,18 @@ export default function PartnerClassesPage() {
     setFormDialog({ open: true, mode: "edit", classId });
     try {
       const data = await getClassByIdApi(classId);
+
+      const categoryId = data.categoryId || categories.find(c => c.categoryName === data.categoryName)?.categoryId || "";
+
       setFormData({
-        categoryId: data.categoryId,
+        categoryId,
         className: data.className,
         description: data.description,
         coachName: data.coachName,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        startDate: splitDateTimeToInputs(data.startTime).date,
+        startTimeStr: splitDateTimeToInputs(data.startTime).time,
+        endDate: splitDateTimeToInputs(data.endTime).date,
+        endTimeStr: splitDateTimeToInputs(data.endTime).time,
         capacity: data.capacity,
         creditCost: data.creditCost,
         difficultyLevel: data.difficultyLevel,
@@ -184,34 +209,49 @@ export default function PartnerClassesPage() {
         }
       }
 
-      if (!formData.startTime) throw new Error("Vui lòng chọn thời gian bắt đầu");
-      if (!formData.endTime) throw new Error("Vui lòng chọn thời gian kết thúc");
-      
-      const start = new Date(formData.startTime);
-      const end = new Date(formData.endTime);
+      if (!formData.startDate || !formData.startTimeStr) throw new Error("Vui lòng chọn đầy đủ ngày và giờ bắt đầu");
+      if (!formData.endDate || !formData.endTimeStr) throw new Error("Vui lòng chọn đầy đủ ngày và giờ kết thúc");
+
+      const startIso = combineDateAndTime(formData.startDate, formData.startTimeStr);
+      const endIso = combineDateAndTime(formData.endDate, formData.endTimeStr);
+
+      const start = new Date(startIso);
+      const end = new Date(endIso);
       const now = new Date();
-      
-      if (start < now) {
-        throw new Error("Thời gian bắt đầu không hợp lệ");
+
+      if (formDialog.mode === "create" && start < now) {
+        throw new Error("Thời gian bắt đầu không hợp lệ (phải ở tương lai)");
       }
       if (end <= start) {
         throw new Error("Thời gian kết thúc phải sau thời gian bắt đầu");
       }
-      
+
       const durationMins = (end.getTime() - start.getTime()) / 60000;
       if (durationMins < 15 || durationMins > 360) {
         throw new Error("Thời lượng lớp học phải từ 15 phút đến 6 tiếng");
       }
 
+      // Create payload removing temporary date fields and adding standard start/endTime
+      const payload: Record<string, unknown> = {
+        ...formData,
+        startTime: startIso,
+        endTime: endIso,
+      };
+
+      delete payload.startDate;
+      delete payload.startTimeStr;
+      delete payload.endDate;
+      delete payload.endTimeStr;
+
       if (formDialog.mode === "create") {
-        await createClassApi(formData as CreateClassRequest);
+        await createClassApi(payload as unknown as CreateClassRequest);
         toast.success("Tạo lớp học thành công!");
       } else if (formDialog.classId) {
-        await updateClassApi(formDialog.classId, formData as UpdateClassRequest);
+        await updateClassApi(formDialog.classId, payload as unknown as UpdateClassRequest);
         toast.success("Cập nhật lớp học thành công!");
       }
       setFormDialog({ open: false, mode: "create", classId: null });
-      fetchClasses();  
+      fetchClasses();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Thao tác thất bại");
     } finally {
@@ -230,7 +270,7 @@ export default function PartnerClassesPage() {
     try {
       await changeClassStatusApi(classId, newStatus);
       toast.success(`Đã ${newStatus === "Open" ? "mở lại" : "hủy"} lớp học`);
-      fetchClasses();  
+      fetchClasses();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Đổi trạng thái thất bại");
     }
@@ -343,7 +383,7 @@ export default function PartnerClassesPage() {
                     const timeStr = `${start.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })} - ${end.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
                     const status = normalizeClassStatus(cls.status);
                     const statusMeta = classStatusMeta[status];
-                    
+
                     return (
                       <tr key={cls.classId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="px-4 py-4 font-medium text-white">
@@ -371,25 +411,25 @@ export default function PartnerClassesPage() {
                         </td>
                         <td className="px-4 py-4 text-right">
                           <div className="flex gap-1 justify-end">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleViewDetail(cls.classId)}
                               className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 h-8 w-8 p-0"
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleEdit(cls.classId)}
                               className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 h-8 w-8 p-0"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleDeleteClass(cls.classId)}
                               className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8 p-0"
                             >
@@ -488,8 +528,8 @@ export default function PartnerClassesPage() {
             {formDialog.mode === "create" && (
               <div>
                 <Label>Chi nhánh *</Label>
-                <Select 
-                  value={formData.branchId} 
+                <Select
+                  value={formData.branchId}
                   onValueChange={(val) => setFormData({ ...formData, branchId: val })}
                 >
                   <SelectTrigger className="bg-background border-white/10">
@@ -507,8 +547,8 @@ export default function PartnerClassesPage() {
             )}
             <div>
               <Label>Tên lớp *</Label>
-              <Input 
-                value={formData.className || ""} 
+              <Input
+                value={formData.className || ""}
                 onChange={(e) => setFormData({ ...formData, className: e.target.value })}
                 className="bg-background border-white/10"
                 placeholder="Nhập tên lớp học"
@@ -516,8 +556,8 @@ export default function PartnerClassesPage() {
             </div>
             <div>
               <Label>Mô tả</Label>
-              <Textarea 
-                value={formData.description || ""} 
+              <Textarea
+                value={formData.description || ""}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="bg-background border-white/10"
                 placeholder="Mô tả về lớp học"
@@ -527,49 +567,114 @@ export default function PartnerClassesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Huấn luyện viên</Label>
-                <Input 
-                  value={formData.coachName || ""} 
+                <Input
+                  value={formData.coachName || ""}
                   onChange={(e) => setFormData({ ...formData, coachName: e.target.value })}
                   className="bg-background border-white/10"
                   placeholder="Tên HLV"
                 />
               </div>
               <div>
-                <Label>Category ID *</Label>
-                <Input 
-                  value={formData.categoryId || ""} 
-                  onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                  className="bg-background border-white/10"
-                  placeholder="ID danh mục"
-                />
+                <Label>Danh mục *</Label>
+                <Select
+                  value={formData.categoryId || ""}
+                  onValueChange={(val) => setFormData({ ...formData, categoryId: val })}
+                >
+                  <SelectTrigger className="bg-background border-white/10">
+                    <SelectValue placeholder="Chọn danh mục" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.categoryId} value={cat.categoryId}>
+                        {cat.categoryName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Thời gian bắt đầu *</Label>
-                <Input 
-                  type="datetime-local"
-                  value={toLocalDatetimeString(formData.startTime)} 
-                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value ? new Date(e.target.value).toISOString() : "" })}
-                  className="bg-background border-white/10"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Ngày bắt đầu *</Label>
+                  <DatePicker
+                    selected={formData.startDate ? new Date(`${formData.startDate}T00:00:00`) : null}
+                    onChange={(date: Date | null) => {
+                      if (date) setFormData({ ...formData, startDate: date.toLocaleDateString('en-CA') })
+                    }}
+                    dateFormat="dd/MM/yyyy"
+                    customInput={<Input className="bg-background border-white/10 w-full" />}
+                    onKeyDown={(e) => e.preventDefault()}
+                    placeholderText="Chọn ngày"
+                  />
+                </div>
+                <div>
+                  <Label>Giờ bắt đầu *</Label>
+                  <DatePicker
+                    selected={formData.startTimeStr ? new Date(`1970-01-01T${formData.startTimeStr}`) : null}
+                    onChange={(date: Date | null) => {
+                      if (date) {
+                        const hh = date.getHours().toString().padStart(2, '0');
+                        const mm = date.getMinutes().toString().padStart(2, '0');
+                        setFormData({ ...formData, startTimeStr: `${hh}:${mm}` });
+                      }
+                    }}
+                    showTimeSelect
+                    showTimeSelectOnly
+                    timeIntervals={15}
+                    timeCaption="Giờ"
+                    dateFormat="HH:mm"
+                    timeFormat="HH:mm"
+                    customInput={<Input className="bg-background border-white/10 w-full" />}
+                    onKeyDown={(e) => e.preventDefault()}
+                    placeholderText="Chọn giờ"
+                  />
+                </div>
               </div>
-              <div>
-                <Label>Thời gian kết thúc *</Label>
-                <Input 
-                  type="datetime-local"
-                  value={toLocalDatetimeString(formData.endTime)} 
-                  onChange={(e) => setFormData({ ...formData, endTime: e.target.value ? new Date(e.target.value).toISOString() : "" })}
-                  className="bg-background border-white/10"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Ngày kết thúc *</Label>
+                  <DatePicker
+                    selected={formData.endDate ? new Date(`${formData.endDate}T00:00:00`) : null}
+                    onChange={(date: Date | null) => {
+                      if (date) setFormData({ ...formData, endDate: date.toLocaleDateString('en-CA') })
+                    }}
+                    dateFormat="dd/MM/yyyy"
+                    customInput={<Input className="bg-background border-white/10 w-full" />}
+                    onKeyDown={(e) => e.preventDefault()}
+                    placeholderText="Chọn ngày"
+                  />
+                </div>
+                <div>
+                  <Label>Giờ kết thúc *</Label>
+                  <DatePicker
+                    selected={formData.endTimeStr ? new Date(`1970-01-01T${formData.endTimeStr}`) : null}
+                    onChange={(date: Date | null) => {
+                      if (date) {
+                        const hh = date.getHours().toString().padStart(2, '0');
+                        const mm = date.getMinutes().toString().padStart(2, '0');
+                        setFormData({ ...formData, endTimeStr: `${hh}:${mm}` });
+                      }
+                    }}
+                    showTimeSelect
+                    showTimeSelectOnly
+                    timeIntervals={15}
+                    timeCaption="Giờ"
+                    dateFormat="HH:mm"
+                    timeFormat="HH:mm"
+                    customInput={<Input className="bg-background border-white/10 w-full" />}
+                    onKeyDown={(e) => e.preventDefault()}
+                    placeholderText="Chọn giờ"
+                  />
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Sĩ số *</Label>
-                <Input 
+                <Input
                   type="number"
-                  value={formData.capacity || 20} 
+                  value={formData.capacity || 20}
                   onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) })}
                   className="bg-background border-white/10"
                   min={1}
@@ -577,9 +682,9 @@ export default function PartnerClassesPage() {
               </div>
               <div>
                 <Label>Credit cost *</Label>
-                <Input 
+                <Input
                   type="number"
-                  value={formData.creditCost || 1} 
+                  value={formData.creditCost || 1}
                   onChange={(e) => setFormData({ ...formData, creditCost: parseInt(e.target.value) })}
                   className="bg-background border-white/10"
                   min={1}
@@ -587,9 +692,9 @@ export default function PartnerClassesPage() {
               </div>
               <div>
                 <Label>Calories</Label>
-                <Input 
+                <Input
                   type="number"
-                  value={formData.caloriesBurnEstimate || 0} 
+                  value={formData.caloriesBurnEstimate || 0}
                   onChange={(e) => setFormData({ ...formData, caloriesBurnEstimate: parseInt(e.target.value) })}
                   className="bg-background border-white/10"
                   min={0}
@@ -599,8 +704,8 @@ export default function PartnerClassesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Độ khó</Label>
-                <Select 
-                  value={formData.difficultyLevel || "Beginner"} 
+                <Select
+                  value={formData.difficultyLevel || "Beginner"}
                   onValueChange={(val) => setFormData({ ...formData, difficultyLevel: val })}
                 >
                   <SelectTrigger className="bg-background border-white/10">
@@ -616,8 +721,8 @@ export default function PartnerClassesPage() {
               {formDialog.mode === "edit" && (
                 <div>
                   <Label>Trạng thái</Label>
-                  <Select 
-                    value={normalizeClassStatus(formData.status)} 
+                  <Select
+                    value={normalizeClassStatus(formData.status)}
                     onValueChange={(val) => setFormData({ ...formData, status: val })}
                   >
                     <SelectTrigger className="bg-background border-white/10">
@@ -634,8 +739,8 @@ export default function PartnerClassesPage() {
             </div>
             <div>
               <Label>Thumbnail URL</Label>
-              <Input 
-                value={formData.thumbnailUrl || ""} 
+              <Input
+                value={formData.thumbnailUrl || ""}
                 onChange={(e) => setFormData({ ...formData, thumbnailUrl: e.target.value })}
                 className="bg-background border-white/10"
                 placeholder="https://..."
@@ -643,15 +748,15 @@ export default function PartnerClassesPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setFormDialog({ open: false, mode: "create", classId: null })}
               disabled={formLoading}
             >
               Hủy
             </Button>
-            <Button 
-              onClick={handleSubmit} 
+            <Button
+              onClick={handleSubmit}
               disabled={formLoading}
               className="bg-primary hover:bg-primary/90"
             >

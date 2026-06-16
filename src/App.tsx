@@ -34,9 +34,12 @@ import ProfilePage from "@/pages/customer/ProfilePage";
 
 // Partner Pages
 import PartnerDashboard from "@/pages/partner/PartnerDashboard";
+
+
 import PartnerGymsPage from "@/pages/partner/PartnerGymsPage";
 import PartnerClassesPage from "@/pages/partner/PartnerClassesPage";
 import PartnerCustomersPage from "@/pages/partner/PartnerCustomersPage";
+import PartnerStaffPage from "@/pages/partner/PartnerStaffPage";
 import PartnerPromotionsPage from "@/pages/partner/PartnerPromotionsPage";
 import PartnerReviewsPage from "@/pages/partner/PartnerReviewsPage";
 import PartnerSettingsPage from "@/pages/partner/PartnerSettingsPage";
@@ -145,6 +148,7 @@ function AnimatedRoutes() {
           <Route path="/partner/gyms" element={<PartnerGymsPage />} />
           <Route path="/partner/classes" element={<PartnerClassesPage />} />
           <Route path="/partner/customers" element={<PartnerCustomersPage />} />
+          <Route path="/partner/staff" element={<PartnerStaffPage />} />
           <Route path="/partner/revenue" element={<LazyPage><PartnerRevenuePage /></LazyPage>} />
           <Route path="/partner/analytics" element={<LazyPage><PartnerRevenuePage /></LazyPage>} />
           <Route path="/partner/promotions" element={<PartnerPromotionsPage />} />

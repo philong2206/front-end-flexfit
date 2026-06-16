@@ -75,12 +75,38 @@ export interface BookingResponse {
   className?: string;
   coachName?: string;
   creditUsed?: number;
+  originalCredit?: number;
+  discountPercent?: number;
+  discountCredit?: number;
+  promotionId?: string | null;
   hasReview?: boolean;
   reviewId?: string | null;
   address?: string;
   district?: string;
   city?: string;
 }
+
+export interface PromotionPreviewResponse {
+  originalCredit: number;
+  discountPercent: number;
+  discountCredit: number;
+  finalCredit: number;
+  promotionId?: string | null;
+  promotionTitle?: string | null;
+  hasPromotion: boolean;
+}
+
+export const getPromotionPreviewApi = async (originalCredit: number): Promise<PromotionPreviewResponse> => {
+  const params = new URLSearchParams({ originalCredit: String(originalCredit) });
+  const response = await fetch(`${API_URL}/promotion-preview?${params.toString()}`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    await handleApiError(response, "Không thể lấy thông tin khuyến mãi");
+  }
+  return response.json();
+};
 
 export const bookGymSessionApi = async (data: CreateGymBookingRequest) => {
   const response = await fetch(`${API_URL}/gym`, {
@@ -173,6 +199,17 @@ export const getPartnerClassBookingsApi = async () => {
   });
   if (!response.ok) {
     await handleApiError(response, "Lấy danh sách đặt lịch lớp học thất bại");
+  }
+  return response.json();
+};
+
+export const getStaffCheckInBookingsApi = async () => {
+  const response = await fetch(`${API_URL}/staff/check-in`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    await handleApiError(response, "Lấy danh sách booking check-in thất bại");
   }
   return response.json();
 };

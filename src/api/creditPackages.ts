@@ -134,7 +134,28 @@ export const getUserTransactionHistoryApi = async (userId: string): Promise<Cred
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || "Lấy lịch sử giao dịch thất bại");
   }
-  return response.json();
+  const data = await response.json();
+  // Handle if wrapped in { data: [...] } or { items: [...] } etc.
+  if (data && !Array.isArray(data)) {
+    return (data.data || data.items || data.result || data.records || []) as CreditTransactionResponse[];
+  }
+  return data as CreditTransactionResponse[];
+};
+
+export const formatCreditAmount = (amount: number) => {
+  if (amount > 0) return `+${amount} credits`;
+  if (amount < 0) return `${amount} credits`;
+  return `${amount} credits`;
+};
+
+export const getCreditTransactionTypeLabel = (type: string) => {
+  if (!type) return "Khác";
+  const t = type.toLowerCase();
+  if (["purchase", "topup", "payment"].includes(t)) return "Nạp credit";
+  if (["booking", "classbooking", "gymbooking"].includes(t)) return "Đặt lịch";
+  if (["cancel", "refund"].includes(t)) return "Hoàn credit";
+  if (t === "adminadjustment" || t === "adjustment") return "Admin điều chỉnh";
+  return type; // raw type fallback
 };
 
 export interface CreateCreditPackageRequest {

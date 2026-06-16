@@ -12,6 +12,9 @@ export interface UserDto {
   isActive: boolean;
   lastLoginAt: string;
   createdAt: string;
+  roles?: string[];
+  assignedGymName?: string;
+  assignedBranchName?: string;
 }
 
 export interface UpdateUserRequest {
@@ -75,7 +78,10 @@ export const deleteUserApi = async (id: string) => {
 
 export interface UserRoleRequestDto {
   userId: string;
-  roleName: string;
+  role: string;
+  roleName?: string;
+  gymId?: string;
+  branchId?: string;
 }
 
 export const assignRoleApi = async (data: UserRoleRequestDto) => {

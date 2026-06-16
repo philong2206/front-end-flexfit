@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { icon: LayoutGrid, label: "Dashboard", path: "/partner" },
   { icon: Building, label: "Quản lý cơ sở", path: "/partner/gyms" },
   { icon: Calendar, label: "Quản lý lớp học", path: "/partner/classes" },
+  { icon: Users, label: "Nhân viên", path: "/partner/staff" },
   { icon: Users, label: "Khách hàng", path: "/partner/customers" },
   { icon: BarChart3, label: "Báo cáo doanh thu", path: "/partner/analytics" },
   { icon: Megaphone, label: "Khuyến mãi", path: "/partner/promotions" },

@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Zap, AlertCircle } from "lucide-react";
+import { CheckCircle2, Zap, AlertCircle, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getPackagesApi, createPaymentApi } from "@/api/payment";
-import type { CreditPackageResponse } from "@/api/creditPackages";
+import { getPackagesApi, createPaymentApi, getMyPaymentHistoryApi, getPaymentStatusInfo, type PaymentHistoryDto } from "@/api/payment";
+import { getUserTransactionHistoryApi, formatCreditAmount, getCreditTransactionTypeLabel, type CreditPackageResponse, type CreditTransactionResponse } from "@/api/creditPackages";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 
 export default function MembershipPage() {
   const { user } = useAuth();
@@ -17,6 +18,12 @@ export default function MembershipPage() {
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [history, setHistory] = useState<PaymentHistoryDto[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const [creditHistory, setCreditHistory] = useState<CreditTransactionResponse[]>([]);
+  const [creditHistoryLoading, setCreditHistoryLoading] = useState(false);
 
   useEffect(() => {
     // Handle PayOS return URL parameters
@@ -39,7 +46,6 @@ export default function MembershipPage() {
 
     const fetchPackages = async () => {
       try {
-        await Promise.resolve();
         setLoading(true);
         const data = await getPackagesApi();
         setPackages(data.filter((p: CreditPackageResponse) => p.isActive).sort((a: CreditPackageResponse, b: CreditPackageResponse) => a.price - b.price));
@@ -50,11 +56,39 @@ export default function MembershipPage() {
       }
     };
 
+    const fetchHistory = async () => {
+      if (!user) return;
+      try {
+        setHistoryLoading(true);
+        const data = await getMyPaymentHistoryApi();
+        setHistory(data);
+      } catch (err) {
+        console.error("Failed to load history", err);
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+
+    const fetchCreditHistory = async () => {
+      if (!user?.userId) return;
+      try {
+        setCreditHistoryLoading(true);
+        const data = await getUserTransactionHistoryApi(user.userId);
+        setCreditHistory(data);
+      } catch (err) {
+        console.error("Failed to load credit history", err);
+      } finally {
+        setCreditHistoryLoading(false);
+      }
+    };
+
     const timer = setTimeout(() => {
       fetchPackages();
+      fetchHistory();
+      fetchCreditHistory();
     }, 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [user]);
 
   const handleBuy = async (pkg: CreditPackageResponse) => {
     if (!user) {
@@ -191,6 +225,127 @@ export default function MembershipPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* Payment History */}
+      {user && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="mt-16"
+        >
+          <div className="flex items-center gap-2 mb-6">
+            <Clock className="w-6 h-6 text-primary" />
+            <h3 className="text-2xl font-bold text-white">Lịch sử thanh toán</h3>
+          </div>
+          <Card className="bg-secondary border-white/5 overflow-hidden">
+            <CardContent className="p-0">
+              {historyLoading ? (
+                <div className="p-8 text-center text-muted-foreground">Đang tải lịch sử...</div>
+              ) : history.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">Chưa có giao dịch nào.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-muted-foreground uppercase bg-black/20">
+                      <tr>
+                        <th className="px-6 py-4">Mã giao dịch</th>
+                        <th className="px-6 py-4">Gói Credit</th>
+                        <th className="px-6 py-4">Số tiền</th>
+                        <th className="px-6 py-4">Trạng thái</th>
+                        <th className="px-6 py-4">Ngày tạo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {history.map((item) => (
+                        <tr key={item.paymentId} className="hover:bg-white/5">
+                          <td className="px-6 py-4 font-mono text-xs">{item.transactionCode || item.paymentId.slice(0, 8)}</td>
+                          <td className="px-6 py-4 font-medium text-white">{item.packageName || "N/A"}</td>
+                          <td className="px-6 py-4 text-primary font-bold">{formatPrice(item.amount)}</td>
+                          <td className="px-6 py-4">
+                            {(() => {
+                              const statusInfo = getPaymentStatusInfo(item.status);
+                              return (
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusInfo.className}`}>
+                                  {statusInfo.label}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-6 py-4 text-muted-foreground">
+                            {format(new Date(item.createdAt), "dd/MM/yyyy HH:mm")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Credit Usage History */}
+      {user && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="mt-16"
+        >
+          <div className="flex items-center gap-2 mb-6">
+            <Zap className="w-6 h-6 text-primary" />
+            <h3 className="text-2xl font-bold text-white">Lịch sử sử dụng credit</h3>
+          </div>
+          <Card className="bg-secondary border-white/5 overflow-hidden">
+            <CardContent className="p-0">
+              {creditHistoryLoading ? (
+                <div className="p-8 text-center text-muted-foreground">Đang tải lịch sử credit...</div>
+              ) : creditHistory.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">Chưa có giao dịch credit nào.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-muted-foreground uppercase bg-black/20">
+                      <tr>
+                        <th className="px-6 py-4">Mã GD</th>
+                        <th className="px-6 py-4">Biến động</th>
+                        <th className="px-6 py-4">Số dư sau GD</th>
+                        <th className="px-6 py-4">Loại giao dịch</th>
+                        <th className="px-6 py-4">Mô tả</th>
+                        <th className="px-6 py-4">Thời gian</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {creditHistory.map((item) => (
+                        <tr key={item.transactionId} className="hover:bg-white/5">
+                          <td className="px-6 py-4 font-mono text-xs text-muted-foreground">
+                            {(item.transactionId || "").slice(0, 8)}
+                          </td>
+                          <td className={`px-6 py-4 font-bold ${(item.amount || 0) > 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            {formatCreditAmount(item.amount || 0)}
+                          </td>
+                          <td className="px-6 py-4 font-medium text-white">{item.balanceAfter || 0}</td>
+                          <td className="px-6 py-4 text-white">
+                            {getCreditTransactionTypeLabel(item.type || "")}
+                          </td>
+                          <td className="px-6 py-4 text-muted-foreground">
+                            {item.description || "Không có mô tả"}
+                          </td>
+                          <td className="px-6 py-4 text-muted-foreground">
+                            {item.createdAt ? format(new Date(item.createdAt), "dd/MM/yyyy HH:mm") : "N/A"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
     </div>
   );
 }

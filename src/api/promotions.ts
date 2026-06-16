@@ -4,20 +4,19 @@ export const API_URL = "/api/promotions";
 
 export interface PromotionDto {
   promotionId: string;
-  code: string;
+  title: string;
   description: string;
   discountPercent: number;
-  maxDiscountAmount: number;
   startDate: string;
   endDate: string;
   isActive: boolean;
+  status?: string;
 }
 
 export interface CreatePromotionRequest {
-  code: string;
+  title: string;
   description: string;
   discountPercent: number;
-  maxDiscountAmount: number;
   startDate: string;
   endDate: string;
 }

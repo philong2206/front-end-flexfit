@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { bookClassApi, getMyGymBookingsApi, getMyClassBookingsApi } from "@/api/bookings";
+import { bookClassApi, getMyGymBookingsApi, getMyClassBookingsApi, getPromotionPreviewApi, type PromotionPreviewResponse } from "@/api/bookings";
 import { getAllClassesApi } from "@/api/classes";
 import { toast } from "sonner";
 import { isClassStartInPast } from "@/lib/gymTimeSlots";
@@ -89,6 +89,8 @@ export default function ClassBookingPage() {
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
   const [isBookingLoading, setIsBookingLoading] = useState(false);
   const [isBooked, setIsBooked] = useState(false);
+  const [promotionPreview, setPromotionPreview] = useState<PromotionPreviewResponse | null>(null);
+  const [isLoadingPromotionPreview, setIsLoadingPromotionPreview] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [remainingByClassId, setRemainingByClassId] = useState<Record<string, number>>({});
   const [isLoadingClasses, setIsLoadingClasses] = useState(true);
@@ -192,9 +194,45 @@ export default function ClassBookingPage() {
   const handleBookClick = (cls: ClassItem) => {
     setSelectedClass(cls);
     setIsBooked(false);
+    setPromotionPreview(null);
     setSlotPickerOpen(true);
     setShowBookingModal(true);
   };
+
+  useEffect(() => {
+    if (!showBookingModal || !selectedClass) {
+      setPromotionPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadPreview = async () => {
+      try {
+        setIsLoadingPromotionPreview(true);
+        const preview = await getPromotionPreviewApi(selectedClass.credits);
+        if (!cancelled) setPromotionPreview(preview);
+      } catch {
+        if (!cancelled) {
+          setPromotionPreview({
+            originalCredit: selectedClass.credits,
+            discountPercent: 0,
+            discountCredit: 0,
+            finalCredit: selectedClass.credits,
+            promotionId: null,
+            promotionTitle: null,
+            hasPromotion: false,
+          });
+        }
+      } finally {
+        if (!cancelled) setIsLoadingPromotionPreview(false);
+      }
+    };
+
+    loadPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [showBookingModal, selectedClass]);
 
   const handleBook = async () => {
     if (!user?.userId) {
@@ -250,9 +288,10 @@ export default function ClassBookingPage() {
       }
 
       // Book Class using the real class id
-      await bookClassApi({
+      const bookingResult = await bookClassApi({
         classId: selectedClass.id
       });
+      const usedCredit = Number(bookingResult?.data?.creditUsed ?? bookingResult?.Data?.CreditUsed ?? promotionPreview?.finalCredit ?? selectedClass.credits);
 
       window.dispatchEvent(new Event("wallet-update"));
 
@@ -265,6 +304,7 @@ export default function ClassBookingPage() {
       });
 
       setIsBooked(true);
+      toast.success(`Đặt chỗ thành công! Đã dùng ${usedCredit} Credit.`);
       setTimeout(() => {
         setShowBookingModal(false);
         setIsBooked(false);
@@ -530,9 +570,30 @@ export default function ClassBookingPage() {
                       <span className="text-muted-foreground flex items-center gap-2 text-sm"><Star className="w-4 h-4" /> Huấn luyện viên</span>
                       <span className="text-white font-medium text-sm truncate max-w-[55%]">{selectedClass.trainer}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground text-sm">Phí đặt chỗ</span>
-                      <span className="text-primary font-bold text-lg">{selectedClass.credits} Credits</span>
+                    <div className="space-y-2">
+                      {promotionPreview?.hasPromotion ? (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground text-sm">Chi phí gốc</span>
+                            <span className="text-white font-medium">{promotionPreview.originalCredit} Credit</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-muted-foreground text-sm">Khuyến mãi</span>
+                            <span className="text-green-400 font-semibold">{promotionPreview.discountPercent}% OFF</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                            <span className="text-muted-foreground text-sm">Còn lại</span>
+                            <span className="text-primary font-bold text-lg">{promotionPreview.finalCredit} Credit</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground text-sm">Chi phí</span>
+                          <span className="text-primary font-bold text-lg">
+                            {isLoadingPromotionPreview ? "Đang kiểm tra..." : `${selectedClass.credits} Credit`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

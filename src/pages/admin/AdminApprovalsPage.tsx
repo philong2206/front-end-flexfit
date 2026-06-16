@@ -78,8 +78,8 @@ export default function AdminApprovalsPage() {
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Xét Duyệt Đối Tác</h1>
-          <p className="text-muted-foreground text-lg">Kiểm tra thông tin giấy phép và phê duyệt các phòng tập đăng ký mới.</p>
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Duyệt phòng tập</h1>
+          <p className="text-muted-foreground text-lg">Kiểm tra và phê duyệt các phòng tập mới do đối tác đăng ký.</p>
         </div>
       </div>
 
@@ -94,7 +94,7 @@ export default function AdminApprovalsPage() {
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-white font-bold text-lg mb-1">Không có yêu cầu chờ duyệt</h3>
+              <h3 className="text-white font-bold text-lg mb-1">Không có phòng tập chờ duyệt</h3>
               <p className="text-sm text-muted-foreground">Tất cả các cơ sở đăng ký mới đã được kiểm duyệt hoàn tất.</p>
             </div>
           </Card>

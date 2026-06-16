@@ -18,6 +18,39 @@ export interface PaymentUrlResponse {
   };
 }
 
+export interface PaymentHistoryDto {
+  paymentId: string;
+  userId: string;
+  userEmail?: string;
+  userFullName?: string;
+  packageId: string;
+  packageName?: string;
+  amount: number;
+  paymentMethod: string;
+  status: string;
+  transactionCode?: string;
+  createdAt: string;
+  paidAt?: string;
+}
+
+export const getPaymentStatusInfo = (status: string) => {
+  if (!status) return { label: 'Không xác định', className: 'bg-gray-500/20 text-gray-400' };
+  const s = status.toLowerCase();
+  if (['success', 'paid', 'completed', 'succeeded'].includes(s)) {
+    return { label: 'Thành công', className: 'bg-green-500/20 text-green-400' };
+  }
+  if (['pending', 'processing'].includes(s)) {
+    return { label: 'Đang xử lý', className: 'bg-yellow-500/20 text-yellow-400' };
+  }
+  if (['failed', 'fail'].includes(s)) {
+    return { label: 'Thất bại', className: 'bg-red-500/20 text-red-400' };
+  }
+  if (['cancelled', 'canceled'].includes(s)) {
+    return { label: 'Đã hủy', className: 'bg-gray-500/20 text-gray-400' };
+  }
+  return { label: status, className: 'bg-gray-500/20 text-gray-400' };
+};
+
 // =========================
 // 1. GET PACKAGES
 // =========================
@@ -196,6 +229,50 @@ export const payosWebhookApi = async (
       errorData.message ||
       "Failed to process webhook"
     );
+  }
+
+  return response.json();
+};
+
+// =========================
+// 6. GET MY PAYMENT HISTORY
+// =========================
+export const getMyPaymentHistoryApi = async (): Promise<PaymentHistoryDto[]> => {
+  const token = localStorage.getItem("access_token");
+
+  const response = await fetch(`${API_URL}/history`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || "Failed to fetch payment history");
+  }
+
+  return response.json();
+};
+
+// =========================
+// 7. GET ADMIN PAYMENT HISTORY
+// =========================
+export const getAdminPaymentHistoryApi = async (): Promise<PaymentHistoryDto[]> => {
+  const token = localStorage.getItem("access_token");
+
+  const response = await fetch(`${API_URL}/admin/history`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || "Failed to fetch admin payment history");
   }
 
   return response.json();

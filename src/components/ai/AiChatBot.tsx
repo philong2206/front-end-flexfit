@@ -717,7 +717,11 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
     }
 
     try {
-      navigate("/explore", { state: suggestion.routeState });
+      if (suggestion.kind === "gym" && suggestion.gymId) {
+        navigate('/explore', { state: { selectedGymId: suggestion.gymId, selectedBranchId: suggestion.branchId } });
+      } else {
+        navigate("/explore", { state: suggestion.routeState });
+      }
       onClose();
     } catch (err) {
       console.error("AI suggestion navigation failed", err);

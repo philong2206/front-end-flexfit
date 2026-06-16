@@ -120,19 +120,20 @@ export interface AssignStaffDto {
   branchId: string;
 }
 
+export interface AssignStaffByEmailDto {
+  email: string;
+  branchId: string;
+}
+
 export interface UpdateBranchStaffDto {
   branchId: string;
   newStaffId: string;
 }
 
 export const assignStaffToBranchApi = async (data: AssignStaffDto) => {
-  const token = localStorage.getItem("access_token");
   const response = await apiFetch(`${API_URL}/assign-staff`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!response.ok) {
@@ -142,13 +143,28 @@ export const assignStaffToBranchApi = async (data: AssignStaffDto) => {
   return response.json();
 };
 
+export const assignStaffByEmailApi = async (data: AssignStaffByEmailDto) => {
+  const url = "/api/partner/staff/assign-by-email";
+  console.log("ASSIGN STAFF BY EMAIL URL:", url);
+
+  const response = await apiFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.message || result.Message || result.title || "Thêm nhân viên vào chi nhánh thất bại");
+  }
+
+  return result;
+};
+
 export const removeStaffFromBranchApi = async (staffId: string, branchId: string) => {
-  const token = localStorage.getItem("access_token");
   const response = await apiFetch(`${API_URL}/remove-staff?staffId=${staffId}&branchId=${branchId}`, {
     method: "DELETE",
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
@@ -158,13 +174,9 @@ export const removeStaffFromBranchApi = async (staffId: string, branchId: string
 };
 
 export const updateBranchStaffApi = async (data: UpdateBranchStaffDto) => {
-  const token = localStorage.getItem("access_token");
   const response = await apiFetch(`${API_URL}/update-staff`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!response.ok) {

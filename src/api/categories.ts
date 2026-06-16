@@ -5,10 +5,10 @@ export const API_URL = "/api/categories";
 
 export interface CategoryDto {
   categoryId: string;
-  name: string;
+  categoryName: string;
   description?: string;
   iconUrl?: string;
-  isActive: boolean;
+  isActive?: boolean;
 }
 
 export interface CreateCategoryRequest {
