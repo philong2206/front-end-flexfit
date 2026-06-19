@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { XCircle, RefreshCw, Home } from "lucide-react";
+import { XCircle, RefreshCw, Home, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { paymentCallbackApi } from "@/api/payment";
@@ -13,44 +13,43 @@ export default function PaymentCancelPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const notifyBackendCancel = async () => {
+    const handleCancel = async () => {
       try {
-        // Lấy paymentId từ localStorage (được lưu lúc ấn mua) hoặc từ query params của PayOS nếu có cấu hình
-const paymentId =
-  localStorage.getItem("pending_payment_id") ||
-  searchParams.get("paymentId") ||
-  searchParams.get("id");        
-        if (!paymentId) {
-          console.warn("Không tìm thấy paymentId để gửi callback.");
-          setLoading(false);
-          return;
+        const paymentId =
+          localStorage.getItem("pending_payment_id") ||
+          searchParams.get("paymentId") ||
+          searchParams.get("id");
+
+        if (paymentId) {
+          // Báo backend đánh dấu giao dịch là Failed/Cancelled
+          await paymentCallbackApi(`paymentId=${paymentId}&status=Failed&message=CancelledByUser`);
         }
 
-        // Gọi API Callback báo hủy thanh toán
-        await paymentCallbackApi(`paymentId=${paymentId}&status=Failed&message=CancelledByUser`);
-        
-        // Xóa ID khỏi localStorage sau khi xử lý xong
+        // Dọn dẹp localStorage
         localStorage.removeItem("pending_payment_id");
-        toast.info("Đã ghi nhận giao dịch bị hủy.");
+        toast.info("Giao dịch đã bị hủy.");
       } catch (err) {
-        console.error("Lỗi khi gửi callback báo hủy:", err);
-        setError("Không thể cập nhật trạng thái giao dịch lên hệ thống.");
+        console.error("Lỗi khi cập nhật trạng thái hủy:", err);
+        setError("Không thể cập nhật trạng thái. Giao dịch sẽ tự động hết hạn.");
       } finally {
         setLoading(false);
       }
     };
 
-    notifyBackendCancel();
+    handleCancel();
   }, [searchParams]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md bg-secondary border-white/5 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-destructive/10 rounded-full blur-[40px] pointer-events-none" />
+        {/* Decorative glow */}
+        <div className="absolute top-0 right-0 w-40 h-40 bg-destructive/10 rounded-full blur-[60px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-amber-500/8 rounded-full blur-[40px] pointer-events-none" />
         
         <CardHeader className="text-center pt-8">
-          <div className="mx-auto w-16 h-16 bg-destructive/15 rounded-full flex items-center justify-center mb-4 text-destructive">
-            <XCircle className="w-10 h-10" />
+          <div className="mx-auto w-20 h-20 bg-destructive/15 rounded-full flex items-center justify-center mb-4 relative">
+            <XCircle className="w-11 h-11 text-destructive" />
+            <AlertTriangle className="w-5 h-5 text-amber-400 absolute -top-1 -right-1 animate-pulse" />
           </div>
           <CardTitle className="text-2xl font-bold text-white">Thanh Toán Bị Hủy</CardTitle>
         </CardHeader>
@@ -61,16 +60,23 @@ const paymentId =
           </p>
           
           {loading && (
-            <div className="flex items-center justify-center gap-2 text-sm text-primary animate-pulse mt-4">
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground animate-pulse mt-4">
               <RefreshCw className="w-4 h-4 animate-spin" />
-              Đang cập nhật trạng thái giao dịch...
+              Đang cập nhật trạng thái...
             </div>
           )}
 
           {error && (
-            <p className="text-xs text-red-400 mt-2 bg-red-500/10 p-2.5 rounded-lg border border-red-500/20">
+            <p className="text-xs text-amber-400 mt-2 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20">
               {error}
             </p>
+          )}
+
+          {/* Reassurance message */}
+          {!loading && !error && (
+            <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm text-muted-foreground">
+              Bạn có thể thử lại bất cứ lúc nào
+            </div>
           )}
         </CardContent>
 

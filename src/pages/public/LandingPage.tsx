@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getAllGymsApi, type GymDto } from "@/api/gyms";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CATEGORIES = [
   { name: "Phòng Gym", count: "10 địa điểm", emoji: "🏋️" },
@@ -28,8 +29,17 @@ const fadeIn = {
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [gyms, setGyms] = useState<GymDto[]>([]);
   const [loadingGyms, setLoadingGyms] = useState(true);
+
+  const handleMembershipClick = () => {
+    if (isAuthenticated) {
+      navigate("/membership");
+    } else {
+      navigate("/register");
+    }
+  };
 
   useEffect(() => {
     const fetchGyms = async () => {
@@ -100,11 +110,13 @@ export default function LandingPage() {
                 transition={{ delay: 0.3, duration: 0.6 }}
                 className="flex flex-col sm:flex-row items-center gap-4"
               >
-                <Link to="/register" className="w-full sm:w-auto">
-                  <Button size="lg" className="w-full rounded-full px-8 h-14 text-base font-semibold glow-btn">
-                    Đăng ký thành viên <ArrowRight className="w-5 h-5 ml-2" />
-                  </Button>
-                </Link>
+                <Button
+                  size="lg"
+                  onClick={handleMembershipClick}
+                  className="w-full sm:w-auto rounded-full px-8 h-14 text-base font-semibold glow-btn"
+                >
+                  Đăng ký thành viên <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
                 <Link to="/explore" className="w-full sm:w-auto">
                   <Button size="lg" variant="outline" className="w-full rounded-full px-8 h-14 text-base font-semibold border-white/20 text-white hover:bg-white/10 glass transition-all">
                     <MapPin className="w-5 h-5 mr-2" /> Khám phá ngay
