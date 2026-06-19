@@ -31,6 +31,10 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
         : input.url;
 
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
+  console.log(
+  "VITE_API_BASE_URL =",
+  import.meta.env.VITE_API_BASE_URL
+);
   if (baseUrl && urlStr.startsWith("/")) {
     if (baseUrl.endsWith("/api") && urlStr.startsWith("/api")) {
       urlStr = baseUrl.replace(/\/api$/, "") + urlStr;
