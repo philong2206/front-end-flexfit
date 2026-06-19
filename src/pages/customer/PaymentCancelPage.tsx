@@ -16,8 +16,10 @@ export default function PaymentCancelPage() {
     const notifyBackendCancel = async () => {
       try {
         // Lấy paymentId từ localStorage (được lưu lúc ấn mua) hoặc từ query params của PayOS nếu có cấu hình
-        const paymentId = localStorage.getItem("pending_payment_id") || searchParams.get("paymentId");
-        
+const paymentId =
+  localStorage.getItem("pending_payment_id") ||
+  searchParams.get("paymentId") ||
+  searchParams.get("id");        
         if (!paymentId) {
           console.warn("Không tìm thấy paymentId để gửi callback.");
           setLoading(false);
