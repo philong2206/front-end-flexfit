@@ -1,5 +1,5 @@
-export const API_URL = "/api/Auth";
-
+export const API_URL =
+  `${import.meta.env.VITE_API_BASE_URL}/api/Auth`;
 /**
  * Map backend error messages to friendly Vietnamese messages for login
  */
