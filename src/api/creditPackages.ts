@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { apiFetch } from "@/lib/apiFetch";
 
-export const API_URL = "/api/credit-packages";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/credit-packages`;
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token");

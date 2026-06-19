@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/apiFetch";
 
-export const API_URL = "/api/Review";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/Review`;
 
 export interface ReviewDto {
   reviewId: string;

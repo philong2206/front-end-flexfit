@@ -1,7 +1,8 @@
 import { apiFetch } from "@/lib/apiFetch";
 import { withShortLivedCache } from "@/lib/simpleGetCache";
 
-export const API_URL = "/api/categories";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/categories`;
+
 
 export interface CategoryDto {
   categoryId: string;

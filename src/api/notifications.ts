@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/apiFetch";
 
-export const NOTIFICATIONS_API_URL = "/api/notifications";
+export const NOTIFICATIONS_API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/notifications`;
 
 const getHeaders = () => {
   const token = localStorage.getItem("access_token");

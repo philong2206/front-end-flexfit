@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/apiFetch";
 
-export const API_URL = "/api/users";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/users`;
 
 export interface UserDto {
   userId: string;

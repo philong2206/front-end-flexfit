@@ -1,6 +1,8 @@
 import { apiFetch } from "@/lib/apiFetch";
 
-export const API_URL = "/api/check-in-logs";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/check-in-logs`;
+
+
 
 export interface ApiError extends Error {
   status?: number;

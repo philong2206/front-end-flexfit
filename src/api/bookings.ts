@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export const API_URL = "/api/bookings";
+export const API_URL =
+  `${import.meta.env.VITE_API_BASE_URL}/api/bookings`;
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token");

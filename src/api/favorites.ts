@@ -1,7 +1,9 @@
 import { apiFetch } from "@/lib/apiFetch";
 
-export const CLASSES_API_URL = "/api/favorite-classes";
-export const GYMS_API_URL = "/api/favorite-gyms";
+export const CLASSES_API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/favorite-classes`;
+export const GYMS_API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/favorite-gyms`;
+
+
 
 const getHeaders = () => {
   const token = localStorage.getItem("access_token");

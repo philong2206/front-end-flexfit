@@ -1,7 +1,7 @@
 import { ApiUnauthorizedError } from "@/api/errors";
 import { apiFetch } from "@/lib/apiFetch";
 
-export const API_URL = "/api/profiles";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/profiles`;
 
 export interface MemberProfileResponse {
   memberProfileId?: string;

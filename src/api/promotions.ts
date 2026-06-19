@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/apiFetch";
 
-export const API_URL = "/api/promotions";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/promotions`;
 
 export interface PromotionDto {
   promotionId: string;

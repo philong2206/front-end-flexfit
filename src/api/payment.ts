@@ -1,4 +1,4 @@
-const API_URL = "/api/payment";
+const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/payment`;
 
 export interface CreatePaymentRequest {
   packageId: string;

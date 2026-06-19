@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/apiFetch";
 
-export const SYSTEM_LOG_API_URL = "/api/SystemLog";
+export const SYSTEM_LOG_API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/SystemLog`;
 
 const getHeaders = () => {
   const token = localStorage.getItem("access_token");

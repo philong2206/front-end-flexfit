@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/apiFetch";
 
-export const API_URL = "/api/gyms";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/gyms`;
 
 export interface GymDto {
   gymId: string;

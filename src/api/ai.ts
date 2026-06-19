@@ -1,7 +1,7 @@
 import { apiFetch } from "@/lib/apiFetch";
 import { ApiError } from "./errors";
 
-const API_URL = "/api/AI";
+const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/AI`;
 
 export const AI_UNAVAILABLE_MESSAGE = "AI hiện chưa khả dụng, vui lòng thử lại sau.";
 

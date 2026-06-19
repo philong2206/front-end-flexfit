@@ -1,7 +1,7 @@
 import { apiFetch } from "@/lib/apiFetch";
 import { withShortLivedCache } from "@/lib/simpleGetCache";
 
-export const API_URL = "/api/classes";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/classes`;
 
 export interface ClassDto {
   classId: string;

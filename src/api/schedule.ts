@@ -1,4 +1,4 @@
-export const API_URL = "/api/schedule";
+export const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/schedule`;
 
 export interface ScheduleItemResponse {
   bookingId: string;
