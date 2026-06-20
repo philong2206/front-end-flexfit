@@ -74,7 +74,7 @@ export default function LandingPage() {
             <div className="absolute inset-0 bg-primary/10 mix-blend-overlay" />
           </motion.div>
 
-          <div className="relative z-10 w-full container mx-auto px-4">
+          <div className="relative z-10 w-full container mx-auto px-4 sm:px-6 lg:px-8 max-w-[1400px]">
             <div className="max-w-2xl">
               <motion.div
                 initial="hidden"
@@ -129,8 +129,8 @@ export default function LandingPage() {
 
         {/* Features Section */}
         <section className="py-16 bg-background relative -mt-16 z-20">
-          <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[1400px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
                 { title: "Đặt chỗ tức thì", desc: "Hệ thống AI xử lý đặt chỗ chỉ trong 30 giây", icon: Zap },
                 { title: "Bảo đảm chất lượng", desc: "100% đối tác được xác minh tiêu chuẩn", icon: ShieldCheck },
@@ -145,7 +145,7 @@ export default function LandingPage() {
                     visible: { opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.5 } }
                   }}
                   key={i} 
-                  className="bg-secondary/50 backdrop-blur-lg rounded-3xl p-8 border border-white/5 flex flex-col items-center text-center shadow-2xl hover:bg-secondary hover:border-white/10 transition-all duration-300 group"
+                  className="bg-secondary/50 backdrop-blur-lg rounded-3xl p-8 border border-white/5 flex flex-col items-center text-center shadow-2xl hover:bg-secondary hover:border-white/10 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(249,115,22,0.05)] transition-all duration-300 group"
                 >
                   <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
                     <feature.icon className="w-8 h-8 text-primary" />
@@ -160,7 +160,7 @@ export default function LandingPage() {
 
         {/* Categories Section */}
         <section className="py-16">
-          <div className="container mx-auto px-4">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[1400px]">
             <motion.h2 
               initial={{ opacity: 0, x: -20 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -169,7 +169,7 @@ export default function LandingPage() {
             >
               Khám phá theo loại hình
             </motion.h2>
-            <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+            <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-7 md:gap-4 md:overflow-visible md:pb-0">
               {CATEGORIES.map((cat, i) => (
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -177,7 +177,7 @@ export default function LandingPage() {
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.05 }}
                   key={i} 
-                  className="bg-secondary rounded-2xl p-6 border border-white/5 min-w-[160px] flex flex-col items-center justify-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all duration-300 cursor-pointer shrink-0 group"
+                  className="bg-secondary rounded-2xl p-6 border border-white/5 min-w-[140px] md:min-w-0 md:w-full flex flex-col items-center justify-center text-center hover:border-primary/40 hover:bg-primary/5 transition-all duration-300 cursor-pointer shrink-0 md:shrink group"
                 >
                   <span className="text-4xl mb-4 group-hover:scale-110 transition-transform">{cat.emoji}</span>
                   <h3 className="text-white font-semibold text-base mb-1">{cat.name}</h3>
@@ -190,7 +190,7 @@ export default function LandingPage() {
 
         {/* Featured Locations */}
         <section className="py-16">
-          <div className="container mx-auto px-4">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[1400px]">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-2xl md:text-3xl font-bold text-white">Địa điểm nổi bật</h2>
               <Link to="/explore" className="text-sm font-semibold text-primary hover:text-white transition-colors flex items-center group">
@@ -216,28 +216,33 @@ export default function LandingPage() {
                   >
                     <Card 
                       onClick={() => navigate('/explore', { state: { selectedGymId: loc.gymId } })}
-                      className="bg-secondary border-white/5 overflow-hidden hover:border-white/20 transition-all duration-300 group cursor-pointer"
+                      className="bg-secondary/40 backdrop-blur-md border border-white/5 rounded-3xl overflow-hidden hover:border-white/15 hover:shadow-[0_20px_40px_rgba(249,115,22,0.05)] hover:-translate-y-1.5 transition-all duration-300 group cursor-pointer"
                     >
                       <div className="h-56 relative overflow-hidden">
-                        <img src={loc.thumbnailUrl || "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop"} alt={loc.gymName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-secondary via-transparent to-transparent opacity-80" />
-                        <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-2 border border-white/10">
+                        <img src={loc.thumbnailUrl || "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop"} alt={loc.gymName} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-85" />
+                        <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md rounded-full px-3.5 py-1.5 flex items-center gap-2 border border-white/10">
                           <Dumbbell className="w-3.5 h-3.5 text-primary" />
-                          <span className="text-xs text-white font-medium">Phòng Gym</span>
+                          <span className="text-xs text-white font-semibold">Phòng Gym</span>
                         </div>
                       </div>
                       <CardContent className="p-6">
                         <h3 className="text-xl font-bold text-white mb-2 group-hover:text-primary transition-colors">{loc.gymName}</h3>
                         <div className="flex items-center justify-between mt-4">
                           <div className="flex items-center text-muted-foreground text-sm">
-                            <MapPin className="w-4 h-4 mr-1.5" /> TP.HCM
+                            <MapPin className="w-4 h-4 mr-1.5 text-primary" /> TP.HCM
                           </div>
-                          <div className="flex items-center text-sm font-medium text-white bg-white/5 px-2 py-1 rounded-md">
+                          <div className="flex items-center text-sm font-medium text-white bg-white/5 px-2.5 py-1 rounded-lg">
                             <Star className="w-4 h-4 text-primary fill-primary mr-1.5" /> {loc.ratingAverage || 5.0}
                           </div>
                         </div>
                         <div className="mt-5 pt-5 border-t border-white/5 flex items-center justify-between">
-                          <span className="text-primary font-bold text-lg">Từ 10 <span className="text-sm font-normal text-muted-foreground">credit</span></span>
+                          <span className="text-primary font-extrabold text-xl">
+                            Từ 10 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider ml-0.5">credits</span>
+                          </span>
+                          <span className="text-xs font-semibold text-white/80 group-hover:text-primary flex items-center gap-1 transition-colors">
+                            Chi tiết <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                          </span>
                         </div>
                       </CardContent>
                     </Card>

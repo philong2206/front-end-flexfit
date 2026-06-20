@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
+import logo from "@/assets/logo.png";
 import {
   Home, Search, Crown, LogIn, ShoppingCart
 } from "lucide-react";
@@ -21,14 +22,9 @@ export function PublicLayout() {
 
       {/* Top Navbar */}
       <header className="border-b border-white/5 bg-background/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[1400px] h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group z-50">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white transition-transform group-hover:scale-105 shadow-[0_0_15px_rgba(249,115,22,0.4)]">
-              FF
-            </div>
-            <span className="text-xl font-bold tracking-tighter text-white uppercase group-hover:text-primary transition-colors hidden sm:block">
-              FLEXFIT
-            </span>
+            <img src={logo} alt="FlexFit Logo" className="h-14 w-auto object-contain transition-transform group-hover:scale-105" />
           </Link>
 
           <nav className="hidden lg:flex items-center gap-6 text-sm font-medium">
@@ -118,12 +114,11 @@ export function PublicLayout() {
       </main>
 
       <footer className="border-t border-white/5 bg-secondary pt-16 pb-8 mt-auto">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[1400px]">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
             <div className="col-span-1 md:col-span-2">
               <Link to="/" className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white text-sm">FF</div>
-                <span className="font-bold text-xl text-white uppercase tracking-tighter">FLEXFIT</span>
+                <img src={logo} alt="FlexFit Logo" className="h-16 w-auto object-contain" />
               </Link>
               <p className="text-muted-foreground max-w-sm text-sm">
                 Nền tảng thể thao kết nối hàng ngàn phòng gym và studio trên toàn quốc. Tập luyện mọi lúc, mọi nơi chỉ với một tài khoản.
@@ -151,7 +146,7 @@ export function PublicLayout() {
           <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row justify-between items-center text-muted-foreground text-sm">
             <p>© 2026 FlexFit Inc. All rights reserved.</p>
             <div className="flex gap-4 mt-4 md:mt-0">
-              <a href="#" className="hover:text-white transition-colors">Facebook</a>
+              <a href="https://www.facebook.com/profile.php?id=61590321338470" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Facebook</a>
               <a href="#" className="hover:text-white transition-colors">Instagram</a>
               <a href="#" className="hover:text-white transition-colors">Twitter</a>
             </div>
