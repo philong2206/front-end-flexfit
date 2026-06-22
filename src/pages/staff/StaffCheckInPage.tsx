@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { QrCode, Search, CheckCircle, Loader2, Camera, Upload, Keyboard, X, ShieldAlert, User, Calendar, Clock, MapPin, Tag, RefreshCw } from "lucide-react";
@@ -80,6 +80,7 @@ export default function StaffCheckInPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isProcessingScan = useRef(false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bookingDetail, setBookingDetail] = useState<any>(null);
@@ -118,15 +119,15 @@ export default function StaffCheckInPage() {
   };
 
   const stopCamera = async () => {
-    if (scannerRef.current && isScanning) {
+    if (scannerRef.current) {
       try {
         await scannerRef.current.stop();
         scannerRef.current.clear();
       } catch (e) {
-        console.error("Lỗi khi dừng camera", e);
+        console.warn("Lỗi hoặc thông báo khi dừng camera:", e);
       }
-      setIsScanning(false);
     }
+    setIsScanning(false);
   };
 
   const fetchAllBookings = async () => {
@@ -251,12 +252,19 @@ export default function StaffCheckInPage() {
 
   const isGuid = (value?: string | null) =>
     typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
   const handleQrScanSuccess = (decodedText: string) => {
+    if (isProcessingScan.current) return;
+    isProcessingScan.current = true;
+
     const { bookingCode } = parseQrPayload(decodedText);
     setSearchCode(bookingCode);
-    handleSearchBooking(decodedText);
+    handleSearchBooking(decodedText).finally(() => {
+      setTimeout(() => {
+        isProcessingScan.current = false;
+      }, 2000);
+    });
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -474,6 +482,8 @@ export default function StaffCheckInPage() {
     const isCheckedIn = bookingDetail.checkInStatus === "CheckedIn" || bookingDetail.checkInStatus === "Đã check-in";
     const isCancelled = bookingDetail.status === "Cancelled";
 
+    const isToday = startTime.toDateString() === now.toDateString();
+
     let badgeText: string;
     let badgeColor: string;
     let statusMessage = "";
@@ -489,7 +499,11 @@ export default function StaffCheckInPage() {
     } else if (isTooEarly) {
       badgeText = "CHƯA ĐẾN GIỜ";
       badgeColor = "bg-orange-500/20 text-orange-400";
-      statusMessage = `Chưa đến giờ check-in. Có thể check-in từ ${minCheckInTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }).replace(/AM|PM/i, "").trim()}.`;
+      const timeStr = minCheckInTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+      const dateStr = format(startTime, "dd/MM/yyyy", { locale: vi });
+      statusMessage = isToday
+        ? `Chưa đến giờ check-in. Có thể check-in từ ${timeStr}.`
+        : `Chưa đến ngày check-in. Lịch tập vào ngày ${dateStr} lúc ${format(startTime, "HH:mm")}.`;
     } else if (isTooLate) {
       badgeText = "HẾT HẠN";
       badgeColor = "bg-red-500/20 text-red-400";

@@ -61,7 +61,7 @@ export function PublicLayout() {
 
           <div className="flex items-center gap-3 md:gap-4 z-50">
             <div className="hidden sm:flex items-center gap-3 text-muted-foreground border-r border-white/10 pr-4">
-              <button 
+              <button
                 className="relative group p-2 hover:bg-white/5 rounded-full transition-colors"
                 onClick={() => toast.info("Tính năng tìm kiếm đang phát triển")}
               >
@@ -70,7 +70,7 @@ export function PublicLayout() {
               {isAuthenticated && role === "member" && (
                 <NotificationBell />
               )}
-              <button 
+              <button
                 className="relative group p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer"
                 onClick={() => toast.info("Tính năng cửa hàng đang phát triển")}
               >
