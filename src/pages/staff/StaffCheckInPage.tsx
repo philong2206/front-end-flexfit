@@ -176,7 +176,7 @@ export default function StaffCheckInPage() {
       stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isScanning]);
+  }, []);
 
   const startCamera = async () => {
     try {
