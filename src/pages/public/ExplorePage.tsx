@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { bookClassApi, bookGymSessionApi, getMyGymBookingsApi, getMyClassBookingsApi, getPromotionPreviewApi, type PromotionPreviewResponse } from "@/api/bookings";
-import { getAllBranchesApi } from "@/api/branches";
+import { getAllBranchesApi, getBranchByIdApi, type BranchDto } from "@/api/branches";
+import { getGymReviewsApi, type ReviewDto } from "@/api/reviews";
 import { getAllClassesApi } from "@/api/classes";
 import { toast } from "sonner";
 import { normalizeApiError, isInsufficientCreditsError } from "@/lib/normalizeApiError";
@@ -109,6 +110,59 @@ export default function ExplorePage() {
   const [bookingError, setBookingError] = useState<string | null>(null); // NEW: track booking error
   const [promotionPreview, setPromotionPreview] = useState<PromotionPreviewResponse | null>(null);
   const [isLoadingPromotionPreview, setIsLoadingPromotionPreview] = useState(false);
+
+  // Gym detail modal state
+  const [gymDetailModal, setGymDetailModal] = useState<{
+    isOpen: boolean;
+    branchId: string | null;
+    gymId: string | null;
+    session: ExploreSession | null;
+  }>({
+    isOpen: false,
+    branchId: null,
+    gymId: null,
+    session: null,
+  });
+  const [gymDetail, setGymDetail] = useState<BranchDto | null>(null);
+  const [gymReviews, setGymReviews] = useState<ReviewDto[]>([]);
+  const [isLoadingGymDetail, setIsLoadingGymDetail] = useState(false);
+
+  const openGymDetail = useCallback(async (session: ExploreSession) => {
+    setGymDetailModal({
+      isOpen: true,
+      branchId: session.branchId,
+      gymId: session.gymId || null,
+      session: session,
+    });
+    setGymDetail(null);
+    setGymReviews([]);
+    setIsLoadingGymDetail(true);
+
+    try {
+      const [detail, reviews] = await Promise.all([
+        getBranchByIdApi(session.branchId),
+        session.gymId ? getGymReviewsApi(session.gymId) : Promise.resolve([]),
+      ]);
+      setGymDetail(detail);
+      setGymReviews(reviews);
+    } catch (err) {
+      console.error("Failed to fetch gym detail and reviews", err);
+      toast.error("Không thể tải chi tiết phòng gym và đánh giá");
+    } finally {
+      setIsLoadingGymDetail(false);
+    }
+  }, []);
+
+  const closeGymDetailModal = useCallback(() => {
+    setGymDetailModal({
+      isOpen: false,
+      branchId: null,
+      gymId: null,
+      session: null,
+    });
+    setGymDetail(null);
+    setGymReviews([]);
+  }, []);
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -560,7 +614,10 @@ export default function ExplorePage() {
                   ref={(el) => { cardRefs.current[cls.id] = el as HTMLDivElement | null; }}
                   className={cn("rounded-xl transition-all duration-700", highlightedId === cls.id ? "ring-4 ring-primary shadow-[0_0_30px_rgba(249,115,22,0.8)] scale-[1.02] z-10" : "")}
                 >
-                  <Card className="overflow-hidden group hover:border-primary/50 transition-all duration-500 bg-secondary flex flex-col h-full shadow-lg relative">
+                  <Card 
+                    className="overflow-hidden group hover:border-primary/50 transition-all duration-500 bg-secondary flex flex-col h-full shadow-lg relative cursor-pointer hover:shadow-primary/10 hover:shadow-2xl"
+                    onClick={() => openGymDetail(cls)}
+                  >
                     {/* PAST CLASS OVERLAY */}
                     {!gym && isPastClass && (
                       <div className="absolute inset-0 bg-black/60 z-20 flex items-center justify-center backdrop-blur-[2px]">
@@ -635,7 +692,10 @@ export default function ExplorePage() {
                       <Button
                         className="w-full glow-btn rounded-xl h-11"
                         disabled={!gym && isPastClass}
-                        onClick={() => openBookingPicker(cls)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openBookingPicker(cls);
+                        }}
                       >
                         {!gym && isPastClass ? "Đã hết hạn" : "Đặt chỗ ngay"}
                       </Button>
@@ -648,6 +708,225 @@ export default function ExplorePage() {
         </AnimatePresence>
       </motion.div>
       )}
+      {/* ─────────────────────────────────────────────
+          GYM / SESSION DETAIL MODAL
+      ───────────────────────────────────────────── */}
+      <AnimatePresence>
+        {gymDetailModal.isOpen && gymDetailModal.session && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+              onClick={closeGymDetailModal}
+            />
+
+            {/* Modal Panel */}
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.96 }}
+              transition={{ type: "spring", stiffness: 320, damping: 28 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div
+                className="pointer-events-auto bg-[#1a1a2e] border border-white/10 rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-[0_25px_60px_rgba(0,0,0,0.8)] flex flex-col overscroll-contain"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Hero Image */}
+                <div className="relative h-60 sm:h-72 shrink-0 overflow-hidden rounded-t-3xl">
+                  <img
+                    src={gymDetailModal.session.image || CLASS_FALLBACK_IMAGE}
+                    alt={gymDetailModal.session.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a2e] via-[#1a1a2e]/30 to-transparent" />
+
+                  {/* Close Button */}
+                  <button
+                    type="button"
+                    onClick={closeGymDetailModal}
+                    className="absolute top-4 right-4 bg-black/50 hover:bg-black/80 text-white rounded-full p-2 transition-colors backdrop-blur-md border border-white/10"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+
+                  {/* Category Badge */}
+                  <div className="absolute bottom-4 left-4 flex items-center gap-2">
+                    <span className="bg-primary text-primary-foreground font-bold px-4 py-1.5 rounded-full text-sm shadow-lg">
+                      {gymDetailModal.session.categoryName || gymDetailModal.session.type}
+                    </span>
+                    {gymDetailModal.session.credits !== undefined && (
+                      <span className="bg-black/60 text-white backdrop-blur-md px-4 py-1.5 rounded-full text-sm border border-white/10">
+                        {gymDetailModal.session.credits} Credit
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 flex flex-col gap-6">
+                  {/* Title & Branch */}
+                  <div>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1">
+                      {gymDetailModal.session.name}
+                    </h2>
+                    <p className="text-primary font-semibold text-base">
+                      {gymDetailModal.session.branchName || gymDetailModal.session.gym}
+                    </p>
+                  </div>
+
+                  {/* Info Cards */}
+                  {isLoadingGymDetail ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[1, 2, 3, 4].map((n) => (
+                        <div key={n} className="h-16 rounded-2xl bg-white/5 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : gymDetail ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex flex-col gap-1">
+                        <span className="text-muted-foreground text-xs uppercase tracking-wide">Địa chỉ</span>
+                        <span className="text-white text-sm font-medium leading-snug">
+                          {[gymDetail.address, gymDetail.district, gymDetail.city].filter(Boolean).join(", ")}
+                        </span>
+                      </div>
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex flex-col gap-1">
+                        <span className="text-muted-foreground text-xs uppercase tracking-wide">Giờ mở cửa</span>
+                        <span className="text-primary font-bold text-sm">
+                          {formatTime(gymDetail.openTime)} – {formatTime(gymDetail.closeTime)}
+                        </span>
+                      </div>
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex flex-col gap-1">
+                        <span className="text-muted-foreground text-xs uppercase tracking-wide">Chi phí</span>
+                        <span className="text-white font-bold text-sm">{gymDetail.creditCost} Credit / slot</span>
+                      </div>
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex flex-col gap-1">
+                        <span className="text-muted-foreground text-xs uppercase tracking-wide">Đánh giá</span>
+                        {gymReviews.length > 0 ? (
+                          <div className="flex items-center gap-1.5">
+                            <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                            <span className="text-white font-bold text-sm">
+                              {(gymReviews.reduce((sum, r) => sum + r.rating, 0) / gymReviews.length).toFixed(1)}
+                            </span>
+                            <span className="text-muted-foreground text-xs">({gymReviews.length} đánh giá)</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Chưa có đánh giá</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* ─── Reviews Section ─── */}
+                  <div>
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                      <Star className="h-5 w-5 text-amber-400 fill-amber-400" />
+                      Đánh giá từ hội viên
+                    </h3>
+
+                    {isLoadingGymDetail ? (
+                      <div className="space-y-3">
+                        {[1, 2, 3].map((n) => (
+                          <div key={n} className="h-20 rounded-2xl bg-white/5 animate-pulse" />
+                        ))}
+                      </div>
+                    ) : gymReviews.length === 0 ? (
+                      <div className="text-center py-8 rounded-2xl bg-white/5 border border-white/5">
+                        <Star className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-muted-foreground text-sm">Chưa có đánh giá nào.</p>
+                        <p className="text-muted-foreground text-xs mt-1">Hãy là người đầu tiên đánh giá!</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-64 overflow-y-auto overscroll-contain pr-1">
+                        {gymReviews.map((review) => {
+                          const stars = Math.round(review.rating);
+                          return (
+                            <motion.div
+                              key={review.reviewId}
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="bg-white/5 border border-white/5 rounded-2xl p-4 hover:border-white/10 transition-colors"
+                            >
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                                    <span className="text-primary font-bold text-xs">
+                                      {review.memberName ? review.memberName[0].toUpperCase() : "U"}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <p className="text-white font-semibold text-sm leading-none">
+                                      {review.memberName || "Hội viên"}
+                                    </p>
+                                    <p className="text-muted-foreground text-xs mt-0.5">
+                                      {new Date(review.createdAt).toLocaleDateString("vi-VN", {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                      })}
+                                    </p>
+                                  </div>
+                                </div>
+                                {/* Star rating */}
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={cn(
+                                        "h-3.5 w-3.5",
+                                        i < stars ? "text-amber-400 fill-amber-400" : "text-muted-foreground"
+                                      )}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              {review.comment && (
+                                <p className="text-gray-300 text-sm leading-relaxed">{review.comment}</p>
+                              )}
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ─── CTA Buttons ─── */}
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 rounded-xl h-11 border-white/10 hover:bg-white/5"
+                      onClick={closeGymDetailModal}
+                    >
+                      Đóng
+                    </Button>
+                    <Button
+                      className="flex-1 glow-btn rounded-xl h-11"
+                      disabled={
+                        gymDetailModal.session
+                          ? !isOpenGym(gymDetailModal.session) &&
+                            !!gymDetailModal.session.endTime &&
+                            new Date(gymDetailModal.session.endTime) < new Date()
+                          : false
+                      }
+                      onClick={() => {
+                        if (!gymDetailModal.session) return;
+                        closeGymDetailModal();
+                        setTimeout(() => openBookingPicker(gymDetailModal.session!), 50);
+                      }}
+                    >
+                      Đặt chỗ ngay
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Booking Modal Overlay */}
       <AnimatePresence>
