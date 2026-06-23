@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Users, DollarSign, Calendar as CalendarIcon, TrendingUp, Activity, MapPin, Loader2, Trash2, BookOpen, Building } from "lucide-react";
+import { Users, DollarSign, Calendar as CalendarIcon, TrendingUp, Activity, MapPin, Loader2, Trash2, BookOpen, Building, Image as ImageIcon, Upload } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import type { ClassDto } from "@/api/classes";
 import { getPartnerDashboardStats, getPartnerClasses, getPartnerBranches } from "@/services/partnerApi";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { toast } from "sonner";
+import { resolveFitnessImage } from "@/lib/imageFallbacks";
 
 // Removed mock data for revenue and attendance
 
@@ -39,7 +40,7 @@ export default function PartnerDashboard() {
   } | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
-  
+
   const [branches, setBranches] = useState<BranchDto[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
 
@@ -50,7 +51,7 @@ export default function PartnerDashboard() {
   // Classes States
   const [classes, setClasses] = useState<ClassDto[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
-  
+
   // Creation States
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -157,7 +158,7 @@ export default function PartnerDashboard() {
 
     try {
       setCreating(true);
-      
+
       const startDateTimeStr = `${newStartDate}T${newStartTime}:00`;
       const endDateTimeStr = `${newEndDate}T${newEndTime}:00`;
 
@@ -191,7 +192,7 @@ export default function PartnerDashboard() {
 
       toast.success("Tạo lớp học mới thành công!");
       setShowCreateModal(false);
-      
+
       // Reset form
       setNewClassName("");
       setNewDescription("");
@@ -204,13 +205,34 @@ export default function PartnerDashboard() {
       setNewCreditCost(4);
       setNewCalories(500);
       setNewThumbnailUrl("");
-      
+
       fetchClasses();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Tạo lớp học thất bại");
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn tệp hình ảnh');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Kích thước ảnh không được vượt quá 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setNewThumbnailUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -242,7 +264,7 @@ export default function PartnerDashboard() {
             </CardContent>
           </Card>
         </motion.div>
-        
+
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card className="bg-card border-white/5 h-full hover:-translate-y-1 hover:shadow-xl hover:border-white/10 transition-all duration-300 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -303,10 +325,10 @@ export default function PartnerDashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                     <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
                     <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
                       itemStyle={{ color: 'white' }}
-                      cursor={{fill: 'rgba(255,255,255,0.05)'}}
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                     />
                     <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -332,14 +354,14 @@ export default function PartnerDashboard() {
                   <AreaChart data={chartAttendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                     <XAxis dataKey="time" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
                     <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px' }}
                       itemStyle={{ color: 'white' }}
                     />
@@ -382,7 +404,7 @@ export default function PartnerDashboard() {
                     ) : classes.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="py-8">
-                          <EmptyState 
+                          <EmptyState
                             icon={CalendarIcon}
                             title="Không có lớp học nào"
                             description="Chưa có lớp học nào được lên lịch."
@@ -396,13 +418,22 @@ export default function PartnerDashboard() {
                       const end = new Date(cls.endTime);
                       const dateStr = start.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
                       const timeStr = `${start.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })} - ${end.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
-                      
+
                       return (
                         <tr key={cls.classId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                           <td className="px-4 py-4 font-medium text-white">
-                            <div>
-                              <div className="font-bold">{cls.className}</div>
-                              <div className="text-xs text-muted-foreground mt-0.5">{cls.branchName}</div>
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-white/5">
+                                <img
+                                  src={resolveFitnessImage(cls.thumbnailUrl)}
+                                  alt={cls.className}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <div>
+                                <div className="font-bold">{cls.className}</div>
+                                <div className="text-xs text-muted-foreground mt-0.5">{cls.branchName}</div>
+                              </div>
                             </div>
                           </td>
                           <td className="px-4 py-4">{cls.coachName || "Chưa có"}</td>
@@ -415,17 +446,16 @@ export default function PartnerDashboard() {
                           <td className="px-4 py-4">
                             <div className="flex items-center gap-2">
                               <span>0/{cls.capacity}</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
-                                cls.status === 'Cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
-                              }`}>
+                              <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${cls.status === 'Cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
+                                }`}>
                                 {cls.status === 'Cancelled' ? 'Hủy' : 'Hoạt động'}
                               </span>
                             </div>
                           </td>
                           <td className="px-4 py-4 text-right">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleDeleteClass(cls.classId)}
                               className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8 p-0"
                             >
@@ -453,7 +483,7 @@ export default function PartnerDashboard() {
                 {loadingBranches ? (
                   <Skeleton className="w-full h-16 rounded-xl" />
                 ) : branches.length === 0 ? (
-                  <EmptyState 
+                  <EmptyState
                     icon={Building}
                     title="Chưa có chi nhánh"
                     description="Hiện tại không có chi nhánh nào hoạt động."
@@ -484,7 +514,7 @@ export default function PartnerDashboard() {
       {/* Create Class Modal Overlay */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={() => !creating && setShowCreateModal(false)}>
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-card border border-white/10 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl relative my-8"
@@ -494,12 +524,12 @@ export default function PartnerDashboard() {
               <h2 className="text-2xl font-bold text-white flex items-center gap-2"><BookOpen className="text-primary w-6 h-6" /> Tạo lớp học mới</h2>
               <p className="text-muted-foreground text-sm">Điền thông tin chi tiết của lớp học để thêm vào lịch hoạt động.</p>
             </div>
-            
+
             <form onSubmit={handleCreateSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Tên lớp học *</label>
-                  <Input 
+                  <Input
                     value={newClassName}
                     onChange={e => setNewClassName(e.target.value)}
                     placeholder="Ví dụ: HIIT Performance"
@@ -509,7 +539,7 @@ export default function PartnerDashboard() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Tên HLV *</label>
-                  <Input 
+                  <Input
                     value={newCoachName}
                     onChange={e => setNewCoachName(e.target.value)}
                     placeholder="Ví dụ: HLV. Nguyễn Văn A"
@@ -552,14 +582,14 @@ export default function PartnerDashboard() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Thời gian bắt đầu *</label>
                   <div className="flex gap-2">
-                    <Input 
+                    <Input
                       type="date"
                       value={newStartDate}
                       onChange={e => setNewStartDate(e.target.value)}
                       className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10 [color-scheme:dark]"
                       required
                     />
-                    <Input 
+                    <Input
                       type="time"
                       value={newStartTime}
                       onChange={e => setNewStartTime(e.target.value)}
@@ -571,14 +601,14 @@ export default function PartnerDashboard() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Thời gian kết thúc *</label>
                   <div className="flex gap-2">
-                    <Input 
+                    <Input
                       type="date"
                       value={newEndDate}
                       onChange={e => setNewEndDate(e.target.value)}
                       className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10 [color-scheme:dark]"
                       required
                     />
-                    <Input 
+                    <Input
                       type="time"
                       value={newEndTime}
                       onChange={e => setNewEndTime(e.target.value)}
@@ -592,7 +622,7 @@ export default function PartnerDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Sức chứa tối đa (Capacity) *</label>
-                  <Input 
+                  <Input
                     type="number"
                     value={newCapacity}
                     onChange={e => setNewCapacity(Number(e.target.value))}
@@ -603,7 +633,7 @@ export default function PartnerDashboard() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Credits yêu cầu *</label>
-                  <Input 
+                  <Input
                     type="number"
                     value={newCreditCost}
                     onChange={e => setNewCreditCost(Number(e.target.value))}
@@ -630,7 +660,7 @@ export default function PartnerDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Calo tiêu hao ước tính</label>
-                  <Input 
+                  <Input
                     type="number"
                     value={newCalories}
                     onChange={e => setNewCalories(Number(e.target.value))}
@@ -639,13 +669,49 @@ export default function PartnerDashboard() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">Đường dẫn ảnh nền (URL)</label>
-                  <Input 
-                    value={newThumbnailUrl}
-                    onChange={e => setNewThumbnailUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10"
-                  />
+                  <label className="text-sm font-medium text-muted-foreground">Ảnh nền lớp học</label>
+                  <div className="mt-1 flex flex-col items-center gap-3">
+                    <div className="relative w-full h-40 rounded-2xl overflow-hidden border-2 border-dashed border-white/10 flex items-center justify-center bg-black/20 group">
+                      {newThumbnailUrl ? (
+                        <>
+                          <img
+                            src={resolveFitnessImage(newThumbnailUrl)}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => document.getElementById('dash-class-image-upload')?.click()}
+                            >
+                              <Upload className="w-4 h-4 mr-2" /> Đổi ảnh
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center text-muted-foreground">
+                          <ImageIcon className="w-10 h-10 mb-1 opacity-20" />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => document.getElementById('dash-class-image-upload')?.click()}
+                          >
+                            <Upload className="w-4 h-4 mr-2" /> Tải ảnh
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      id="dash-class-image-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageChange}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -661,18 +727,18 @@ export default function PartnerDashboard() {
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-white/5 bg-black/20 -mx-6 -mb-6 p-6 justify-end">
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
-                  className="border-white/10 hover:bg-white/5" 
+                  variant="outline"
+                  className="border-white/10 hover:bg-white/5"
                   onClick={() => setShowCreateModal(false)}
                   disabled={creating}
                 >
                   Hủy
                 </Button>
-                <Button 
+                <Button
                   type="submit"
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground" 
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
                   disabled={creating}
                 >
                   {creating ? (

@@ -7,6 +7,8 @@ import { getAllGymsApi, changeGymStatusApi, type GymDto } from "@/api/gyms";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
+import { resolveFitnessImage } from "@/lib/imageFallbacks";
+
 export default function AdminApprovalsPage() {
   const [gyms, setGyms] = useState<GymDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,7 @@ export default function AdminApprovalsPage() {
     title: "",
     message: "",
     type: "info",
-    onConfirm: () => {}
+    onConfirm: () => { }
   });
 
   const fetchGyms = async () => {
@@ -107,13 +109,13 @@ export default function AdminApprovalsPage() {
             >
               <Card className="bg-secondary border-white/5 hover:border-white/10 transition-all overflow-hidden">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
-                  
+
                   {/* Left Column: Image/Branding */}
                   <div className="lg:col-span-1 flex flex-col justify-between">
                     {gym.thumbnailUrl ? (
-                      <img 
-                        src={gym.thumbnailUrl} 
-                        alt={gym.gymName} 
+                      <img
+                        src={gym.thumbnailUrl}
+                        alt={gym.gymName}
                         className="w-full h-40 object-cover rounded-xl border border-white/10"
                       />
                     ) : (
@@ -158,13 +160,13 @@ export default function AdminApprovalsPage() {
 
                   {/* Right Column: Actions */}
                   <div className="lg:col-span-1 flex flex-col justify-center gap-3 border-t lg:border-t-0 lg:border-l border-white/5 pt-4 lg:pt-0 lg:pl-6">
-                    <Button 
+                    <Button
                       onClick={() => handleStatusChange(gym.gymId, "Approved")}
                       className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold flex items-center justify-center gap-2 rounded-xl"
                     >
                       <CheckCircle className="w-4.5 h-4.5" /> Duyệt cơ sở
                     </Button>
-                    <Button 
+                    <Button
                       onClick={() => handleStatusChange(gym.gymId, "Rejected")}
                       variant="outline"
                       className="w-full border-red-500/20 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl"

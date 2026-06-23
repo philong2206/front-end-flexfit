@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, CheckCircle, XCircle, Trash2, ShieldAlert, Star, Plus, Edit2, UserPlus } from "lucide-react";
+import { Search, CheckCircle, XCircle, Trash2, ShieldAlert, Star, Plus, Edit2, UserPlus, Image as ImageIcon, Upload } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getAllGymsApi, changeGymStatusApi, deleteGymApi, createGymApi, updateGymApi, transferGymOwnershipApi, type GymDto } from "@/api/gyms";
@@ -7,6 +7,7 @@ import { getAllUsersApi, type UserDto } from "@/api/users";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { resolveFitnessImage } from "@/lib/imageFallbacks";
 
 const getUserRoleNames = (user: unknown): string[] => {
   const getRoleNamesFromValue = (value: unknown): string[] => {
@@ -43,7 +44,7 @@ export default function AdminPartnersPage() {
     type: "danger" | "warning" | "info";
     onConfirm: () => void;
   }>({
-    isOpen: false, title: "", message: "", type: "info", onConfirm: () => {}
+    isOpen: false, title: "", message: "", type: "info", onConfirm: () => { }
   });
 
   // Modal states
@@ -99,11 +100,11 @@ export default function AdminPartnersPage() {
     const title = status === "Approved" ? "Xác nhận kích hoạt" : "Xác nhận tạm dừng";
     const confirmMsg = status === "Approved"
       ? (gym.status === "Rejected"
-          ? `Bạn có chắc chắn muốn kích hoạt lại cơ sở "${gym.gymName}" hoạt động?`
-          : `Bạn có chắc chắn muốn phê duyệt cơ sở "${gym.gymName}" hoạt động?`)
+        ? `Bạn có chắc chắn muốn kích hoạt lại cơ sở "${gym.gymName}" hoạt động?`
+        : `Bạn có chắc chắn muốn phê duyệt cơ sở "${gym.gymName}" hoạt động?`)
       : (gym.status === "Approved"
-          ? `Bạn có chắc chắn muốn tạm dừng hoạt động cơ sở "${gym.gymName}"?`
-          : `Bạn có chắc chắn muốn từ chối đơn đăng ký cơ sở "${gym.gymName}"?`);
+        ? `Bạn có chắc chắn muốn tạm dừng hoạt động cơ sở "${gym.gymName}"?`
+        : `Bạn có chắc chắn muốn từ chối đơn đăng ký cơ sở "${gym.gymName}"?`);
 
     setConfirmModal({
       isOpen: true,
@@ -160,6 +161,27 @@ export default function AdminPartnersPage() {
       email: gym.email
     });
     setGymModal({ isOpen: true, mode: "edit", gym });
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn tệp hình ảnh');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Kích thước ảnh không được vượt quá 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormData({ ...formData, thumbnailUrl: reader.result as string });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmitGym = async () => {
@@ -224,8 +246,8 @@ export default function AdminPartnersPage() {
   };
 
   const filteredGyms = gyms.filter(g => {
-    const matchesSearch = g.gymName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (g.email && g.email.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = g.gymName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (g.email && g.email.toLowerCase().includes(searchQuery.toLowerCase()));
     if (filterStatus === "ALL") return matchesSearch;
     return matchesSearch && g.status.toUpperCase() === filterStatus;
   });
@@ -277,18 +299,17 @@ export default function AdminPartnersPage() {
               <CardTitle className="text-white">Danh sách phòng tập</CardTitle>
               <CardDescription>Danh sách đối tác liên kết hệ thống</CardDescription>
             </div>
-            
+
             <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
               <div className="flex bg-black/20 rounded-xl p-1 border border-white/5">
                 {["ALL", "APPROVED", "PENDING", "REJECTED"].map((status) => (
                   <button
                     key={status}
                     onClick={() => setFilterStatus(status)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase transition-all ${
-                      filterStatus === status 
-                        ? "bg-primary text-primary-foreground" 
-                        : "text-muted-foreground hover:text-white"
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase transition-all ${filterStatus === status
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-white"
+                      }`}
                   >
                     {status === "ALL" ? "Tất cả" : status === "APPROVED" ? "Đã duyệt" : status === "PENDING" ? "Chờ duyệt" : "Từ chối"}
                   </button>
@@ -297,11 +318,11 @@ export default function AdminPartnersPage() {
 
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Tìm kiếm phòng tập..." 
+                  placeholder="Tìm kiếm phòng tập..."
                   className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-primary/50"
                 />
               </div>
@@ -339,13 +360,13 @@ export default function AdminPartnersPage() {
                     <tr key={gym.gymId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
-                          {gym.thumbnailUrl ? (
-                            <img src={gym.thumbnailUrl} alt={gym.gymName} className="w-10 h-10 rounded-lg object-cover border border-white/10" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-                              {gym.gymName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
+                          <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-white/5">
+                            <img
+                              src={resolveFitnessImage(gym.thumbnailUrl)}
+                              alt={gym.gymName}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
                           <div>
                             <div className="font-semibold text-white">{gym.gymName}</div>
                             <div className="text-xs text-muted-foreground max-w-xs truncate">{gym.description || "Chưa cập nhật mô tả"}</div>
@@ -364,13 +385,12 @@ export default function AdminPartnersPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider ${
-                          gym.status === "Approved" ? "bg-green-500/20 text-green-400" :
+                        <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider ${gym.status === "Approved" ? "bg-green-500/20 text-green-400" :
                           gym.status === "Pending" ? "bg-amber-500/20 text-amber-400" :
-                          "bg-red-500/20 text-red-400"
-                        }`}>
+                            "bg-red-500/20 text-red-400"
+                          }`}>
                           {gym.status === "Approved" ? "Hoạt động" :
-                           gym.status === "Pending" ? "Chờ duyệt" : "Bị từ chối"}
+                            gym.status === "Pending" ? "Chờ duyệt" : "Bị từ chối"}
                         </span>
                       </td>
                       <td className="px-4 py-4">
@@ -381,7 +401,7 @@ export default function AdminPartnersPage() {
                           <Button variant="ghost" size="sm" className="h-8 p-1 px-2 text-blue-400 hover:text-blue-300" onClick={() => openEditModal(gym)} title="Sửa thông tin">
                             <Edit2 className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" className="h-8 p-1 px-2 text-violet-400 hover:text-violet-300" onClick={() => setTransferModal({isOpen: true, gym})} title="Chuyển chủ sở hữu">
+                          <Button variant="ghost" size="sm" className="h-8 p-1 px-2 text-violet-400 hover:text-violet-300" onClick={() => setTransferModal({ isOpen: true, gym })} title="Chuyển chủ sở hữu">
                             <UserPlus className="w-4 h-4" />
                           </Button>
 
@@ -428,7 +448,7 @@ export default function AdminPartnersPage() {
         onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
       />
 
-      <Dialog open={gymModal.isOpen} onOpenChange={(open) => setGymModal(prev => ({...prev, isOpen: open}))}>
+      <Dialog open={gymModal.isOpen} onOpenChange={(open) => setGymModal(prev => ({ ...prev, isOpen: open }))}>
         <DialogContent className="bg-[#1E293B] text-white border-white/10 sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>{gymModal.mode === "create" ? "Thêm Phòng Gym Mới" : "Sửa Phòng Gym"}</DialogTitle>
@@ -439,7 +459,7 @@ export default function AdminPartnersPage() {
                 <label className="text-sm font-medium text-muted-foreground">Chủ sở hữu (Owner) *</label>
                 <select
                   value={formData.ownerId}
-                  onChange={(e) => setFormData({...formData, ownerId: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
                   className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-white"
                 >
                   <option value="">-- Chọn User --</option>
@@ -461,7 +481,7 @@ export default function AdminPartnersPage() {
               <input
                 type="text"
                 value={formData.gymName}
-                onChange={(e) => setFormData({...formData, gymName: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, gymName: e.target.value })}
                 className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-white"
                 placeholder="Ví dụ: FlexFit City Center"
               />
@@ -471,7 +491,7 @@ export default function AdminPartnersPage() {
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-white"
                 placeholder="Email liên hệ"
               />
@@ -481,33 +501,68 @@ export default function AdminPartnersPage() {
               <input
                 type="text"
                 value={formData.phoneNumber}
-                onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                 className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-white"
                 placeholder="SĐT liên hệ"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Ảnh đại diện (URL)</label>
-              <input
-                type="text"
-                value={formData.thumbnailUrl}
-                onChange={(e) => setFormData({...formData, thumbnailUrl: e.target.value})}
-                className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-white"
-                placeholder="https://example.com/image.jpg"
-              />
+              <label className="text-sm font-medium text-muted-foreground">Ảnh đại diện phòng tập</label>
+              <div className="mt-1 flex flex-col items-center gap-3">
+                <div className="relative w-full h-40 rounded-xl overflow-hidden border-2 border-dashed border-white/10 flex items-center justify-center bg-black/20 group">
+                  {formData.thumbnailUrl ? (
+                    <>
+                      <img
+                        src={resolveFitnessImage(formData.thumbnailUrl)}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => document.getElementById('admin-gym-image-upload')?.click()}
+                        >
+                          <Upload className="w-4 h-4 mr-2" /> Thay đổi ảnh
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center text-muted-foreground">
+                      <ImageIcon className="w-10 h-10 mb-1 opacity-20" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => document.getElementById('admin-gym-image-upload')?.click()}
+                      >
+                        <Upload className="w-4 h-4 mr-2" /> Tải ảnh
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <input
+                  id="admin-gym-image-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageChange}
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Mô tả</label>
               <textarea
                 value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-white min-h-[80px]"
                 placeholder="Giới thiệu về phòng gym..."
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setGymModal(prev => ({...prev, isOpen: false}))}>Hủy</Button>
+            <Button variant="ghost" onClick={() => setGymModal(prev => ({ ...prev, isOpen: false }))}>Hủy</Button>
             <Button onClick={handleSubmitGym} disabled={isSubmitting}>
               {isSubmitting ? "Đang lưu..." : "Lưu"}
             </Button>
@@ -515,7 +570,7 @@ export default function AdminPartnersPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={transferModal.isOpen} onOpenChange={(open) => setTransferModal(prev => ({...prev, isOpen: open}))}>
+      <Dialog open={transferModal.isOpen} onOpenChange={(open) => setTransferModal(prev => ({ ...prev, isOpen: open }))}>
         <DialogContent className="bg-[#1E293B] text-white border-white/10 sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Chuyển chủ sở hữu phòng tập</DialogTitle>
@@ -546,7 +601,7 @@ export default function AdminPartnersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setTransferModal({isOpen: false, gym: null})}>Hủy</Button>
+            <Button variant="ghost" onClick={() => setTransferModal({ isOpen: false, gym: null })}>Hủy</Button>
             <Button onClick={handleTransferSubmit} disabled={isSubmitting || !transferOwnerId}>
               {isSubmitting ? "Đang xử lý..." : "Xác nhận"}
             </Button>
