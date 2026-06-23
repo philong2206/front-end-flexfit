@@ -10,13 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { toast } from "sonner";
 import type { GymDto } from "@/api/gyms";
-import { createBranchApi, updateBranchApi, deleteBranchApi, changeBranchStatusApi, updateBranchImagesApi, type BranchDto, type BranchImageDto, type CreateBranchRequest, type UpdateBranchRequest } from "@/api/branches";
+import { createBranchApi, updateBranchApi, deleteBranchApi, changeBranchStatusApi, updateBranchImagesApi, updateBranchAmenitiesApi, type BranchDto, type BranchImageDto, type CreateBranchRequest, type UpdateBranchRequest } from "@/api/branches";
 import { getPartnerGyms, getPartnerBranches } from "@/services/partnerApi";
+import { getAmenitiesApi, type AmenityDto } from "@/api/amenities";
 import { resolveFitnessImage } from "@/lib/imageFallbacks";
+import { Badge } from "@/components/ui/badge";
+import { Check } from "lucide-react";
 
 export default function PartnerGymsPage() {
   const [gyms, setGyms] = useState<GymDto[]>([]);
   const [branches, setBranches] = useState<BranchDto[]>([]);
+  const [amenities, setAmenities] = useState<AmenityDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,12 +38,14 @@ export default function PartnerGymsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [gymData, branchData] = await Promise.all([
+      const [gymData, branchData, amenityData] = await Promise.all([
         getPartnerGyms(),
-        getPartnerBranches()
+        getPartnerBranches(),
+        getAmenitiesApi()
       ]);
       setGyms(gymData);
       setBranches(branchData);
+      setAmenities(amenityData);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Không thể tải danh sách dữ liệu";
       setError(message);
@@ -68,6 +74,7 @@ export default function PartnerGymsPage() {
       closeTime: "22:00:00",
       thumbnailUrl: "",
       creditCost: 1,
+      amenityIds: [],
     });
     setGalleryImages([]);
     setIsGalleryModified(false);
@@ -85,6 +92,7 @@ export default function PartnerGymsPage() {
       closeTime: branch.closeTime,
       thumbnailUrl: branch.thumbnailUrl,
       creditCost: branch.creditCost,
+      amenityIds: branch.amenities?.map(a => a.amenityId) || [],
     });
     setGalleryImages(branch.images || []);
     setIsGalleryModified(false);
@@ -132,6 +140,16 @@ export default function PartnerGymsPage() {
             toast.error(`Cơ sở đã được tạo, nhưng cập nhật ảnh thất bại. Lỗi: ${errorMsg}`);
           }
         }
+
+        // Cập nhật tiện ích sau khi tạo branch
+        if (branchId && formData.amenityIds && formData.amenityIds.length > 0) {
+          try {
+            await updateBranchAmenitiesApi(branchId, { amenityIds: formData.amenityIds });
+          } catch (amErr) {
+            console.error("Lỗi cập nhật tiện ích:", amErr);
+            toast.error("Cơ sở đã được tạo, nhưng cập nhật tiện ích thất bại.");
+          }
+        }
       } else if (formDialog.branchId) {
         // Chế độ chỉnh sửa: cập nhật ảnh TRƯỚC (concurrency token chưa thay đổi),
         // sau đó mới cập nhật thông tin branch
@@ -149,6 +167,17 @@ export default function PartnerGymsPage() {
         }
 
         await updateBranchApi(formDialog.branchId, formData as UpdateBranchRequest);
+
+        // Cập nhật tiện ích
+        if (formData.amenityIds) {
+          try {
+            await updateBranchAmenitiesApi(formDialog.branchId, { amenityIds: formData.amenityIds });
+          } catch (amErr) {
+            console.error("Lỗi cập nhật tiện ích:", amErr);
+            toast.error("Cập nhật tiện ích thất bại");
+          }
+        }
+
         toast.success("Cập nhật cơ sở thành công");
       }
 
@@ -377,6 +406,22 @@ export default function PartnerGymsPage() {
                           <span className="text-primary">{branch.creditCost}</span> Credit
                         </span>
                       </div>
+
+                      {branch.amenities && branch.amenities.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {branch.amenities.slice(0, 3).map((a) => (
+                            <Badge key={a.amenityId} variant="outline" className="text-[10px] py-0 px-1.5 bg-primary/5 border-primary/20 text-primary-foreground/80">
+                              {a.amenityName}
+                            </Badge>
+                          ))}
+                          {branch.amenities.length > 3 && (
+                            <span className="text-[10px] text-muted-foreground flex items-center">
+                              +{branch.amenities.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       <div className="pt-2 border-t border-white/5 flex items-center justify-between">
                         <span className="text-muted-foreground">Trạng thái:</span>
                         <button
@@ -497,6 +542,46 @@ export default function PartnerGymsPage() {
                 min={0}
               />
             </div>
+
+            {/* Amenities Section */}
+            <div className="pt-4 border-t border-white/5">
+              <Label className="text-white font-bold text-lg mb-4 block">Tiện ích cơ sở</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {amenities.map((amenity) => {
+                  const isChecked = formData.amenityIds?.includes(amenity.amenityId);
+                  return (
+                    <div
+                      key={amenity.amenityId}
+                      onClick={() => {
+                        const currentIds = formData.amenityIds || [];
+                        const newIds = isChecked
+                          ? currentIds.filter(id => id !== amenity.amenityId)
+                          : [...currentIds, amenity.amenityId];
+                        setFormData({ ...formData, amenityIds: newIds });
+                      }}
+                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${isChecked
+                        ? 'bg-primary/10 border-primary/50 text-white'
+                        : 'bg-black/20 border-white/10 text-muted-foreground hover:border-white/20'
+                        }`}
+                    >
+                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isChecked
+                        ? 'bg-primary border-primary text-white'
+                        : 'border-white/20 group-hover:border-white/40'
+                        }`}>
+                        {isChecked && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-medium leading-none">{amenity.amenityName}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {amenities.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">Đang tải danh sách tiện ích...</p>
+              )}
+            </div>
+
             <div>
               <Label>Ảnh đại diện cơ sở</Label>
               <div className="mt-2 flex flex-col items-center gap-4">

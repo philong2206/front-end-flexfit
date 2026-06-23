@@ -23,6 +23,7 @@ export interface BranchDto {
   createdAt: string;
   staffs: StaffInfoDto[];
   images?: BranchImageDto[];
+  amenities?: any[]; // The screenshot showed amenities: []
 }
 
 export interface CreateBranchRequest {
@@ -35,6 +36,7 @@ export interface CreateBranchRequest {
   closeTime: string;
   thumbnailUrl: string;
   creditCost: number;
+  amenityIds?: string[];
 }
 
 export interface UpdateBranchRequest {
@@ -46,6 +48,7 @@ export interface UpdateBranchRequest {
   closeTime: string;
   thumbnailUrl: string;
   creditCost: number;
+  amenityIds?: string[];
 }
 
 export const getAllBranchesApi = async (): Promise<BranchDto[]> => {
@@ -196,6 +199,10 @@ export interface UpdateBranchImagesRequest {
   images: BranchImageDto[];
 }
 
+export interface UpdateBranchAmenitiesRequest {
+  amenityIds: string[];
+}
+
 export const updateBranchImagesApi = async (id: string, data: UpdateBranchImagesRequest) => {
   const response = await apiFetch(`${API_URL}/${id}/images`, {
     method: "PUT",
@@ -205,6 +212,19 @@ export const updateBranchImagesApi = async (id: string, data: UpdateBranchImages
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.message || "Cập nhật danh sách ảnh thất bại");
+  }
+  return response.json();
+};
+
+export const updateBranchAmenitiesApi = async (id: string, data: UpdateBranchAmenitiesRequest) => {
+  const response = await apiFetch(`${API_URL}/${id}/amenities`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || "Cập nhật danh sách tiện ích thất bại");
   }
   return response.json();
 };
