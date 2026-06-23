@@ -1,4 +1,4 @@
-import { User, Mail, Phone, LogOut, Camera, Heart, Save } from "lucide-react";
+import { User, Mail, Phone, LogOut, Camera, Heart, Save, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,14 @@ import { ApiUnauthorizedError } from "@/api/errors";
 import { useMemberProfile, invalidateProfileCache } from "@/hooks/useMemberProfile";
 import { useMemberWalletSnapshot } from "@/hooks/useMemberWalletSnapshot";
 import { useResolvedUserId } from "@/hooks/useResolvedUserId";
+import { changePasswordApi } from "@/api/auth";
 
-type ProfileSection = "personal" | "health";
+type ProfileSection = "personal" | "health" | "security";
 
 const SECTIONS: { id: ProfileSection; label: string; icon: typeof User }[] = [
   { id: "personal", label: "Thông tin cá nhân", icon: User },
   { id: "health", label: "Sức khỏe & Mục tiêu", icon: Heart },
+  { id: "security", label: "Đổi mật khẩu", icon: Lock },
 ];
 
 export default function ProfilePage() {
@@ -59,6 +61,10 @@ export default function ProfilePage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
   useEffect(() => {
     if (!profile) return;
@@ -161,6 +167,41 @@ export default function ProfilePage() {
         return;
       }
       const errMsg = error instanceof Error ? error.message : "Cập nhật thất bại";
+      setMessage({ text: errMsg, type: "error" });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      setMessage({ text: "Vui lòng điền đầy đủ tất cả các trường mật khẩu.", type: "error" });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setMessage({ text: "Mật khẩu mới phải có ít nhất 6 ký tự.", type: "error" });
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setMessage({ text: "Mật khẩu mới và xác nhận mật khẩu không khớp nhau.", type: "error" });
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      setMessage(null);
+      await changePasswordApi({
+        currentPassword,
+        newPassword
+      });
+      setMessage({ text: "Đổi mật khẩu thành công!", type: "success" });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Đổi mật khẩu thất bại";
       setMessage({ text: errMsg, type: "error" });
     } finally {
       setIsUpdating(false);
@@ -465,10 +506,50 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
             )}
+
+            {activeSection === "security" && (
+            <Card className="bg-secondary border-white/5">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-white text-lg">Đổi mật khẩu</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-0">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Mật khẩu hiện tại</label>
+                  <Input 
+                    type="password"
+                    value={currentPassword} 
+                    onChange={e => setCurrentPassword(e.target.value)} 
+                    placeholder="Nhập mật khẩu hiện tại"
+                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Mật khẩu mới</label>
+                  <Input 
+                    type="password"
+                    value={newPassword} 
+                    onChange={e => setNewPassword(e.target.value)} 
+                    placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Xác nhận mật khẩu mới</label>
+                  <Input 
+                    type="password"
+                    value={confirmNewPassword} 
+                    onChange={e => setConfirmNewPassword(e.target.value)} 
+                    placeholder="Xác nhận lại mật khẩu mới"
+                    className="bg-black/50 border-white/10 text-white focus-visible:ring-primary h-10" 
+                  />
+                </div>
+              </CardContent>
+            </Card>
+            )}
             </>
             )}
           </div>
-
+ 
           {/* Sticky save — always reachable */}
           <div className="fixed bottom-0 left-0 right-0 z-40 md:sticky md:bottom-4 md:mt-6 p-4 md:p-0 border-t md:border-t-0 border-white/10 bg-background/95 backdrop-blur-xl md:bg-transparent md:backdrop-blur-none">
             <div className="max-w-6xl mx-auto md:max-w-none flex gap-3">
@@ -481,12 +562,14 @@ export default function ProfilePage() {
                 <LogOut className="w-4 h-4" />
               </Button>
               <Button
-                onClick={handleSave}
+                onClick={activeSection === "security" ? handlePasswordChange : handleSave}
                 disabled={isUpdating}
                 className="glow-btn flex-1 h-12 md:h-11 text-base font-semibold"
               >
                 <Save className="w-4 h-4 mr-2 shrink-0" />
-                {isUpdating ? "Đang lưu..." : "Lưu thay đổi"}
+                {activeSection === "security" 
+                  ? (isUpdating ? "Đang đổi mật khẩu..." : "Đổi mật khẩu") 
+                  : (isUpdating ? "Đang lưu..." : "Lưu thay đổi")}
               </Button>
             </div>
           </div>

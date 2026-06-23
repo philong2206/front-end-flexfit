@@ -195,3 +195,32 @@ export const resetPasswordApi = async (data: ResetPasswordRequest): Promise<{ me
   }
   return response.json();
 };
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export const changePasswordApi = async (data: ChangePasswordRequest): Promise<{ message?: string }> => {
+  const token = localStorage.getItem("access_token");
+  const response = await fetch(`${API_URL}/change-password`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    let msg = "Đổi mật khẩu thất bại";
+    try {
+      const parsed = JSON.parse(errorText);
+      msg = parsed.message || parsed.Message || msg;
+    } catch {
+      if (errorText) msg = errorText;
+    }
+    throw new Error(msg);
+  }
+  return response.text().then(text => text ? JSON.parse(text) : {});
+};
