@@ -250,14 +250,6 @@ export default function ExplorePage() {
 
         const allSessions = [...generated, ...realClasses];
         setSessions(allSessions);
-
-        const state = location.state as { autoSelectName?: string; autoSelectGym?: string } | null;
-        if (state?.autoSelectName) {
-          const matched = allSessions.find(s => s.name === state.autoSelectName && (!state.autoSelectGym || s.gym === state.autoSelectGym));
-          if (matched) {
-            openBookingPicker(matched);
-          }
-        }
       } catch (err) {
         if (ac.signal.aborted) return;
         console.error("Failed to load branches and sessions", err);
@@ -267,38 +259,52 @@ export default function ExplorePage() {
     };
     loadBranchesAndSessions();
     return () => ac.abort();
-  }, [location.state, openBookingPicker]);
+  }, []);
 
   useEffect(() => {
     if (isLoadingSessions || sessions.length === 0) return;
     
-    const state = location.state as { selectedGymId?: string; selectedBranchId?: string; autoSelectName?: string; autoSelectGym?: string } | null;
-    if (state?.selectedGymId || state?.selectedBranchId) {
-      const matched = sessions.find(s => 
+    const state = location.state as { 
+      selectedGymId?: string; 
+      selectedBranchId?: string; 
+      autoSelectName?: string; 
+      autoSelectGym?: string; 
+    } | null;
+    
+    if (!state) return;
+
+    let matched: ExploreSession | undefined;
+
+    if (state.autoSelectName) {
+      matched = sessions.find(s => 
+        s.name === state.autoSelectName && 
+        (!state.autoSelectGym || s.gym === state.autoSelectGym)
+      );
+    } else if (state.selectedGymId || state.selectedBranchId) {
+      matched = sessions.find(s => 
         s.isOpenGym && 
         ((state.selectedBranchId && s.branchId === state.selectedBranchId) || 
          (state.selectedGymId && s.gymId === state.selectedGymId))
       );
-      
-      if (matched) {
-        setActiveCategory(ALL_CATEGORY);
-        setSearchQuery("");
-        
-        setTimeout(() => {
-          const el = cardRefs.current[matched.id];
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setHighlightedId(matched.id);
-            setTimeout(() => setHighlightedId(null), 3000);
-            
-            openBookingPicker(matched);
-          }
-        }, 150);
-        
-        window.history.replaceState({}, document.title);
-      }
     }
-  }, [isLoadingSessions, sessions, location.state, openBookingPicker]);
+      
+    if (matched) {
+      setActiveCategory(ALL_CATEGORY);
+      setSearchQuery("");
+      
+      const targetId = matched.id;
+      setTimeout(() => {
+        const el = cardRefs.current[targetId];
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setHighlightedId(targetId);
+          setTimeout(() => setHighlightedId(null), 3000);
+        }
+      }, 150);
+      
+      window.history.replaceState({}, document.title);
+    }
+  }, [isLoadingSessions, sessions, location.state]);
 
   const hourSlotsForPicker = useMemo(() => {
     const cls = bookingModal.classData;
