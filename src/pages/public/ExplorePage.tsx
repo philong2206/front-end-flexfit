@@ -10,6 +10,7 @@ import { bookClassApi, bookGymSessionApi, getMyGymBookingsApi, getMyClassBooking
 import { getAllBranchesApi, getBranchByIdApi, type BranchDto } from "@/api/branches";
 import { getGymReviewsApi, type ReviewDto } from "@/api/reviews";
 import { getAllClassesApi } from "@/api/classes";
+import { getUserByIdApi } from "@/api/users";
 import { toast } from "sonner";
 import { normalizeApiError, isInsufficientCreditsError } from "@/lib/normalizeApiError";
 import { FITNESS_FALLBACK_IMAGE, resolveFitnessImage } from "@/lib/imageFallbacks";
@@ -125,6 +126,7 @@ export default function ExplorePage() {
   });
   const [gymDetail, setGymDetail] = useState<BranchDto | null>(null);
   const [gymReviews, setGymReviews] = useState<ReviewDto[]>([]);
+  const [reviewerAvatars, setReviewerAvatars] = useState<Record<string, string>>({});
   const [isLoadingGymDetail, setIsLoadingGymDetail] = useState(false);
 
   const openGymDetail = useCallback(async (session: ExploreSession) => {
@@ -136,6 +138,7 @@ export default function ExplorePage() {
     });
     setGymDetail(null);
     setGymReviews([]);
+    setReviewerAvatars({});
     setIsLoadingGymDetail(true);
 
     try {
@@ -145,6 +148,24 @@ export default function ExplorePage() {
       ]);
       setGymDetail(detail);
       setGymReviews(reviews);
+
+      // Batch-fetch avatars for all unique reviewer userIds
+      const uniqueUserIds = Array.from(
+        new Set(reviews.map((r) => r.userId).filter((id): id is string => !!id))
+      );
+      if (uniqueUserIds.length > 0) {
+        const results = await Promise.allSettled(
+          uniqueUserIds.map((id) => getUserByIdApi(id))
+        );
+        const avatarMap: Record<string, string> = {};
+        results.forEach((res, index) => {
+          const userId = uniqueUserIds[index];
+          if (res.status === "fulfilled" && res.value?.avatarUrl) {
+            avatarMap[userId] = res.value.avatarUrl;
+          }
+        });
+        setReviewerAvatars(avatarMap);
+      }
     } catch (err) {
       console.error("Failed to fetch gym detail and reviews", err);
       toast.error("Không thể tải chi tiết phòng gym và đánh giá");
@@ -162,6 +183,7 @@ export default function ExplorePage() {
     });
     setGymDetail(null);
     setGymReviews([]);
+    setReviewerAvatars({});
   }, []);
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -844,6 +866,7 @@ export default function ExplorePage() {
                       <div className="space-y-3 max-h-64 overflow-y-auto overscroll-contain pr-1">
                         {gymReviews.map((review) => {
                           const stars = Math.round(review.rating);
+                          const userAvatar = review.userId ? reviewerAvatars[review.userId] : undefined;
                           return (
                             <motion.div
                               key={review.reviewId}
@@ -853,7 +876,25 @@ export default function ExplorePage() {
                             >
                               <div className="flex items-start justify-between mb-2">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                                  {userAvatar ? (
+                                    <img
+                                      src={userAvatar}
+                                      alt={review.memberName || "Hội viên"}
+                                      className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10"
+                                      onError={(e) => {
+                                        const imgEl = e.currentTarget;
+                                        const sibling = imgEl.nextElementSibling as HTMLElement;
+                                        imgEl.style.display = "none";
+                                        if (sibling) {
+                                          sibling.style.display = "flex";
+                                        }
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div
+                                    style={{ display: userAvatar ? "none" : "flex" }}
+                                    className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0"
+                                  >
                                     <span className="text-primary font-bold text-xs">
                                       {review.memberName ? review.memberName[0].toUpperCase() : "U"}
                                     </span>
