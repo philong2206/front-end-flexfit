@@ -10,8 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { toast } from "sonner";
 import type { GymDto } from "@/api/gyms";
-import type { BranchDto, CreateBranchRequest, UpdateBranchRequest } from "@/api/branches";
-import { createBranchApi, updateBranchApi, deleteBranchApi, changeBranchStatusApi } from "@/api/branches";
+import { createBranchApi, updateBranchApi, deleteBranchApi, changeBranchStatusApi, updateBranchImagesApi, type BranchDto, type BranchImageDto, type CreateBranchRequest, type UpdateBranchRequest } from "@/api/branches";
 import { getPartnerGyms, getPartnerBranches } from "@/services/partnerApi";
 import { resolveFitnessImage } from "@/lib/imageFallbacks";
 
@@ -25,6 +24,8 @@ export default function PartnerGymsPage() {
     open: false, mode: "create", branchId: null
   });
   const [formData, setFormData] = useState<Partial<CreateBranchRequest & UpdateBranchRequest>>({});
+  const [galleryImages, setGalleryImages] = useState<BranchImageDto[]>([]);
+  const [isGalleryModified, setIsGalleryModified] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, branchId: string | null }>({ open: false, branchId: null });
@@ -68,11 +69,14 @@ export default function PartnerGymsPage() {
       thumbnailUrl: "",
       creditCost: 1,
     });
+    setGalleryImages([]);
+    setIsGalleryModified(false);
     setFormDialog({ open: true, mode: "create", branchId: null });
   };
 
   const handleEdit = (branch: BranchDto) => {
     setFormData({
+      gymId: branch.gymId,
       branchName: branch.branchName,
       address: branch.address,
       city: branch.city,
@@ -82,6 +86,8 @@ export default function PartnerGymsPage() {
       thumbnailUrl: branch.thumbnailUrl,
       creditCost: branch.creditCost,
     });
+    setGalleryImages(branch.images || []);
+    setIsGalleryModified(false);
     setFormDialog({ open: true, mode: "edit", branchId: branch.branchId });
   };
 
@@ -107,10 +113,41 @@ export default function PartnerGymsPage() {
         throw new Error("Giờ mở cửa phải trước giờ đóng cửa");
       }
 
+      let branchId = formDialog.branchId;
+
       if (formDialog.mode === "create") {
-        await createBranchApi(formData as CreateBranchRequest);
+        // Chế độ tạo mới: tạo branch trước để lấy ID, sau đó cập nhật ảnh
+        const res = await createBranchApi(formData as CreateBranchRequest);
+        branchId = typeof res === 'string' ? res : (res.branchId || res.id);
         toast.success("Thêm cơ sở thành công");
+
+        // Cập nhật gallery sau khi tạo branch
+        if (branchId && galleryImages.length > 0) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await updateBranchImagesApi(branchId, { images: galleryImages });
+          } catch (imgErr) {
+            console.error("Lỗi cập nhật gallery:", imgErr);
+            const errorMsg = imgErr instanceof Error ? imgErr.message : "";
+            toast.error(`Cơ sở đã được tạo, nhưng cập nhật ảnh thất bại. Lỗi: ${errorMsg}`);
+          }
+        }
       } else if (formDialog.branchId) {
+        // Chế độ chỉnh sửa: cập nhật ảnh TRƯỚC (concurrency token chưa thay đổi),
+        // sau đó mới cập nhật thông tin branch
+        if (isGalleryModified) {
+          try {
+            console.log("Đang cập nhật gallery cho branchId:", formDialog.branchId);
+            await updateBranchImagesApi(formDialog.branchId, { images: galleryImages });
+          } catch (imgErr) {
+            console.error("Lỗi cập nhật gallery:", imgErr);
+            const errorMsg = imgErr instanceof Error ? imgErr.message : "";
+            toast.error(`Cập nhật bộ sưu tập ảnh thất bại. Lỗi: ${errorMsg}`);
+          }
+          // Delay nhỏ để backend xử lý xong images trước khi cập nhật branch
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
         await updateBranchApi(formDialog.branchId, formData as UpdateBranchRequest);
         toast.success("Cập nhật cơ sở thành công");
       }
@@ -151,25 +188,78 @@ export default function PartnerGymsPage() {
     }
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+
+          if (width > height && width > maxDim) {
+            height *= maxDim / width;
+            width = maxDim;
+          } else if (height > maxDim) {
+            width *= maxDim / height;
+            height = maxDim;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Vui lòng chọn tệp hình ảnh');
-      return;
+    try {
+      const compressed = await compressImage(file);
+      setFormData({ ...formData, thumbnailUrl: compressed });
+    } catch (err) {
+      toast.error("Lỗi xử lý ảnh");
     }
+  };
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Kích thước ảnh không được vượt quá 5MB');
-      return;
+  const handleGalleryChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setIsGalleryModified(true); // Đánh dấu là gallery đã thay đổi
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name} không phải là hình ảnh`);
+        continue;
+      }
+      try {
+        const compressed = await compressImage(file);
+        setGalleryImages((prev) => [
+          ...prev,
+          { imageUrl: compressed, displayOrder: prev.length }
+        ]);
+      } catch (err) {
+        toast.error(`Lỗi xử lý ảnh: ${file.name}`);
+      }
     }
+  };
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFormData({ ...formData, thumbnailUrl: reader.result as string });
-    };
-    reader.readAsDataURL(file);
+  const removeGalleryImage = (index: number) => {
+    setIsGalleryModified(true); // Đánh dấu là gallery đã thay đổi
+    setGalleryImages((prev) => {
+      const filtered = prev.filter((_, i) => i !== index);
+      return filtered.map((img, i) => ({ ...img, displayOrder: i }));
+    });
   };
 
   return (
@@ -235,6 +325,12 @@ export default function PartnerGymsPage() {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    {branch.images && branch.images.length > 0 && (
+                      <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1.5 text-white shadow-xl">
+                        <ImageIcon className="w-3 h-3 text-primary" />
+                        <span className="text-[10px] font-bold">{branch.images.length}</span>
+                      </div>
+                    )}
                   </div>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-white flex items-start justify-between gap-2">
@@ -286,8 +382,8 @@ export default function PartnerGymsPage() {
                         <button
                           onClick={() => handleChangeStatus(branch.branchId, branch.isActive)}
                           className={`px-3 py-1 rounded-full text-xs font-bold tracking-wider transition-colors ${branch.isActive
-                              ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                              : 'bg-gray-500/20 text-gray-400 hover:bg-gray-500/30'
+                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            : 'bg-gray-500/20 text-gray-400 hover:bg-gray-500/30'
                             }`}
                         >
                           {branch.isActive ? 'HOẠT ĐỘNG' : 'TẠM DỪNG'}
@@ -446,6 +542,53 @@ export default function PartnerGymsPage() {
                   * Hệ thống sẽ lưu trữ ảnh đại diện của cơ sở. Dung lượng tối đa 5MB.
                 </p>
               </div>
+            </div>
+
+            {/* Gallery Section */}
+            <div className="pt-4 border-t border-white/5">
+              <Label className="text-white font-bold text-lg mb-4 block">Bộ sưu tập ảnh (Gallery)</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {galleryImages.map((img, index) => (
+                  <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group bg-black/20">
+                    <img
+                      src={resolveFitnessImage(img.imageUrl)}
+                      alt={`Gallery ${index}`}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-1 left-1 bg-black/60 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
+                      {img.displayOrder + 1}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeGalleryImage(index)}
+                      className="absolute top-1 right-1 bg-red-500/80 hover:bg-red-600 rounded-full w-6 h-6 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('gallery-upload')?.click()}
+                  className="aspect-square rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                    <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
+                  </div>
+                  <span className="text-xs text-muted-foreground group-hover:text-primary font-medium">Thêm ảnh</span>
+                </button>
+              </div>
+              <input
+                id="gallery-upload"
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={handleGalleryChange}
+              />
+              <p className="text-[10px] text-muted-foreground mt-3">
+                * Thêm nhiều ảnh để khách hàng có cái nhìn chi tiết về cơ sở. Ảnh được sắp xếp theo thứ tự bạn thêm vào.
+              </p>
             </div>
           </div>
           <DialogFooter>
