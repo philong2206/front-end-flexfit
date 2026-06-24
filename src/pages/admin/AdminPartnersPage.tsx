@@ -62,6 +62,7 @@ export default function AdminPartnersPage() {
   // Form states
   const [formData, setFormData] = useState({
     ownerId: "",
+    ownerEmail: "", // Added for owner lookup
     gymName: "",
     description: "",
     thumbnailUrl: "",
@@ -147,13 +148,14 @@ export default function AdminPartnersPage() {
   };
 
   const openCreateModal = () => {
-    setFormData({ ownerId: "", gymName: "", description: "", thumbnailUrl: "", phoneNumber: "", email: "" });
+    setFormData({ ownerId: "", ownerEmail: "", gymName: "", description: "", thumbnailUrl: "", phoneNumber: "", email: "" });
     setGymModal({ isOpen: true, mode: "create", gym: null });
   };
 
   const openEditModal = (gym: GymDto) => {
     setFormData({
-      ownerId: gym.ownerId, // Edit will ignore ownerId per swagger
+      ownerId: gym.ownerId,
+      ownerEmail: "", // Reset for edit
       gymName: gym.gymName,
       description: gym.description,
       thumbnailUrl: gym.thumbnailUrl,
@@ -218,15 +220,22 @@ export default function AdminPartnersPage() {
       toast.error("Vui lòng điền đủ tên, email và số điện thoại.");
       return;
     }
-    if (gymModal.mode === "create" && !formData.ownerId) {
-      toast.error("Vui lòng chọn chủ sở hữu (Owner).");
-      return;
-    }
 
+    let finalOwnerId = formData.ownerId;
     if (gymModal.mode === "create") {
-      const selectedUser = users.find(u => u.userId === formData.ownerId);
-      const isPartner = selectedUser && getUserRoleNames(selectedUser).includes("GymPartner");
-      if (selectedUser && !isPartner) {
+      if (!formData.ownerEmail) {
+        toast.error("Vui lòng nhập email chủ sở hữu.");
+        return;
+      }
+      const owner = users.find(u => u.email.toLowerCase() === formData.ownerEmail.toLowerCase());
+      if (!owner) {
+        toast.error("Không tìm thấy người dùng với email này. Vui lòng kiểm tra lại.");
+        return;
+      }
+      finalOwnerId = owner.userId;
+
+      const isPartner = getUserRoleNames(owner).includes("GymPartner");
+      if (!isPartner) {
         if (!window.confirm("User này chưa có role GymPartner. Vẫn tiếp tục tạo cơ sở?")) {
           return;
         }
@@ -236,7 +245,10 @@ export default function AdminPartnersPage() {
     try {
       setIsSubmitting(true);
       if (gymModal.mode === "create") {
-        await createGymApi(formData);
+        await createGymApi({
+          ...formData,
+          ownerId: finalOwnerId
+        });
         toast.success("Tạo phòng gym thành công!");
       } else if (gymModal.gym) {
         await updateGymApi(gymModal.gym.gymId, {
@@ -478,31 +490,21 @@ export default function AdminPartnersPage() {
       />
 
       <Dialog open={gymModal.isOpen} onOpenChange={(open) => setGymModal(prev => ({ ...prev, isOpen: open }))}>
-        <DialogContent className="bg-[#1E293B] text-white border-white/10 sm:max-w-[500px]">
+        <DialogContent className="bg-[#1E293B] text-white border-white/10 sm:max-w-[500px] max-h-[90vh] overflow-y-auto pr-2 custom-scrollbar">
           <DialogHeader>
             <DialogTitle>{gymModal.mode === "create" ? "Thêm Phòng Gym Mới" : "Sửa Phòng Gym"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             {gymModal.mode === "create" && (
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Chủ sở hữu (Owner) *</label>
-                <select
-                  value={formData.ownerId}
-                  onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+                <label className="text-sm font-medium text-muted-foreground">Email chủ sở hữu (Owner) *</label>
+                <input
+                  type="email"
+                  value={formData.ownerEmail}
+                  onChange={(e) => setFormData({ ...formData, ownerEmail: e.target.value })}
                   className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-white"
-                >
-                  <option value="">-- Chọn User --</option>
-                  <optgroup label="Users có role GymPartner">
-                    {gymPartnerUsers.partners.map(u => (
-                      <option key={u.userId} value={u.userId}>{u.fullName} ({u.email})</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Users khác">
-                    {gymPartnerUsers.others.map(u => (
-                      <option key={u.userId} value={u.userId}>{u.fullName} ({u.email})</option>
-                    ))}
-                  </optgroup>
-                </select>
+                  placeholder="Nhập email chủ sở hữu"
+                />
               </div>
             )}
             <div className="space-y-2">
