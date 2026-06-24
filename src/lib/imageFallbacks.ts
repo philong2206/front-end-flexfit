@@ -6,8 +6,9 @@ export function resolveFitnessImage(url: string | null | undefined): string {
   const trimmed = url.trim();
   if (!trimmed) return FITNESS_FALLBACK_IMAGE;
 
-  // 1. Nếu là URL tuyệt đối hoặc Base64
+  // 1. Nếu là URL tuyệt đối, Base64 hoặc chứa example.com (seed data)
   if (
+    trimmed.includes('example.com') ||
     trimmed.startsWith('http://') ||
     trimmed.startsWith('https://') ||
     trimmed.startsWith('/') ||

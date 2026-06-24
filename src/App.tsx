@@ -50,6 +50,8 @@ import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminApprovalsPage from "@/pages/admin/AdminApprovalsPage";
 import AdminPartnersPage from "@/pages/admin/AdminPartnersPage";
 import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
+import AdminAmenitiesPage from "@/pages/admin/AdminAmenitiesPage";
+
 
 // Staff Pages
 import StaffDashboard from "@/pages/staff/StaffDashboard";
@@ -161,6 +163,7 @@ function AnimatedRoutes() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/partners" element={<AdminPartnersPage />} />
+          <Route path="/admin/amenities" element={<AdminAmenitiesPage />} />
           <Route path="/admin/revenue" element={<LazyPage><AdminRevenuePage /></LazyPage>} />
           <Route path="/admin/approvals" element={<AdminApprovalsPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />

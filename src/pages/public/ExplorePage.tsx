@@ -128,6 +128,7 @@ export default function ExplorePage() {
   const [gymReviews, setGymReviews] = useState<ReviewDto[]>([]);
   const [reviewerAvatars, setReviewerAvatars] = useState<Record<string, string>>({});
   const [isLoadingGymDetail, setIsLoadingGymDetail] = useState(false);
+  const [activeDetailImage, setActiveDetailImage] = useState<string>("");
 
   const openGymDetail = useCallback(async (session: ExploreSession) => {
     setGymDetailModal({
@@ -140,6 +141,7 @@ export default function ExplorePage() {
     setGymReviews([]);
     setReviewerAvatars({});
     setIsLoadingGymDetail(true);
+    setActiveDetailImage(session.image || CLASS_FALLBACK_IMAGE);
 
     try {
       const [detail, reviews] = await Promise.all([
@@ -651,7 +653,7 @@ export default function ExplorePage() {
 
                     <div className="h-48 overflow-hidden relative">
                       <img 
-                        src={cls.image || CLASS_FALLBACK_IMAGE} 
+                        src={resolveFitnessImage(cls.image)} 
                         alt={cls.name}
                         loading="lazy"
                         decoding="async"
@@ -694,12 +696,12 @@ export default function ExplorePage() {
                           </div>
                         </div>
                         {!gym && cls.startTime && (
-                          <div className="flex items-center text-sm text-gray-300">
+                           <div className="flex items-center text-sm text-gray-300">
                              <Calendar className="h-4 w-4 mr-3 text-muted-foreground shrink-0" />
                              <span>
                                {new Date(cls.startTime).toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric' })}
                              </span>
-                          </div>
+                           </div>
                         )}
                         <div className="flex items-center text-sm text-gray-300">
                           <Clock className="h-4 w-4 mr-3 text-muted-foreground shrink-0" />
@@ -761,9 +763,9 @@ export default function ExplorePage() {
                 {/* Hero Image */}
                 <div className="relative h-60 sm:h-72 shrink-0 overflow-hidden rounded-t-3xl">
                   <img
-                    src={gymDetailModal.session.image || CLASS_FALLBACK_IMAGE}
+                    src={resolveFitnessImage(activeDetailImage || gymDetailModal.session.image)}
                     alt={gymDetailModal.session.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-all duration-300"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a2e] via-[#1a1a2e]/30 to-transparent" />
 
@@ -788,6 +790,41 @@ export default function ExplorePage() {
                     )}
                   </div>
                 </div>
+
+                {/* Image Gallery Row */}
+                {gymDetail && gymDetail.images && gymDetail.images.length > 0 && (
+                  <div className="px-6 pt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent bg-[#1a1a2e] border-b border-white/5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setActiveDetailImage(gymDetailModal.session?.image || "")}
+                      className={cn(
+                        "w-16 h-12 sm:w-20 sm:h-14 rounded-lg overflow-hidden border shrink-0 transition-all",
+                        activeDetailImage === (gymDetailModal.session?.image || "")
+                          ? "border-primary scale-95 ring-1 ring-primary"
+                          : "border-white/10 hover:border-white/30"
+                      )}
+                    >
+                      <img src={resolveFitnessImage(gymDetailModal.session?.image)} className="w-full h-full object-cover" alt="Main cover" />
+                    </button>
+                    {[...gymDetail.images]
+                      .sort((a, b) => a.displayOrder - b.displayOrder)
+                      .map((img, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setActiveDetailImage(img.imageUrl)}
+                          className={cn(
+                            "w-16 h-12 sm:w-20 sm:h-14 rounded-lg overflow-hidden border shrink-0 transition-all",
+                            activeDetailImage === img.imageUrl
+                              ? "border-primary scale-95 ring-1 ring-primary"
+                              : "border-white/10 hover:border-white/30"
+                          )}
+                        >
+                          <img src={resolveFitnessImage(img.imageUrl)} className="w-full h-full object-cover" alt={`Gallery ${idx}`} />
+                        </button>
+                      ))}
+                  </div>
+                )}
 
                 {/* Content */}
                 <div className="p-6 flex flex-col gap-6">
@@ -842,6 +879,28 @@ export default function ExplorePage() {
                       </div>
                     </div>
                   ) : null}
+
+                  {/* Amenities Section */}
+                  {gymDetail && gymDetail.amenities && gymDetail.amenities.length > 0 && (
+                    <div className="mt-2">
+                      <h3 className="text-lg font-bold text-white mb-3">Tiện ích cơ sở</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {gymDetail.amenities.map((a: any) => (
+                          <div 
+                            key={a.amenityId} 
+                            className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl text-sm text-gray-200"
+                          >
+                            {a.iconUrl ? (
+                              <img src={a.iconUrl} alt={a.amenityName} className="w-4 h-4 object-contain" />
+                            ) : (
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            )}
+                            <span className="font-medium text-xs sm:text-sm">{a.amenityName}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* ─── Reviews Section ─── */}
                   <div>

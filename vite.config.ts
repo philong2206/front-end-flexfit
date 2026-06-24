@@ -22,8 +22,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-       "/api": {
-      target: "http://localhost:5023",
+      "/api": {
+      target: "https://flexfit-api-2026-f7d2d4g6e0dncfa5.indonesiacentral-01.azurewebsites.net",
       changeOrigin: true,
       secure: true,
       },

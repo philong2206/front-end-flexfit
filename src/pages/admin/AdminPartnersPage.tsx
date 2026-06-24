@@ -163,7 +163,40 @@ export default function AdminPartnersPage() {
     setGymModal({ isOpen: true, mode: "edit", gym });
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+
+          if (width > height && width > maxDim) {
+            height *= maxDim / width;
+            width = maxDim;
+          } else if (height > maxDim) {
+            width *= maxDim / height;
+            height = maxDim;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -172,16 +205,12 @@ export default function AdminPartnersPage() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Kích thước ảnh không được vượt quá 5MB');
-      return;
+    try {
+      const compressed = await compressImage(file);
+      setFormData({ ...formData, thumbnailUrl: compressed });
+    } catch (err) {
+      toast.error('Lỗi xử lý ảnh');
     }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFormData({ ...formData, thumbnailUrl: reader.result as string });
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleSubmitGym = async () => {

@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { getAllGymsApi, changeGymStatusApi, type GymDto } from "@/api/gyms";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-
-import { resolveFitnessImage } from "@/lib/imageFallbacks";
+// import { resolveFitnessImage } from "@/lib/imageFallbacks";   
 
 export default function AdminApprovalsPage() {
   const [gyms, setGyms] = useState<GymDto[]>([]);

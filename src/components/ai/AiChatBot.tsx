@@ -27,7 +27,7 @@ import {
   type AISuggestionResponse,
 } from "@/api/ai";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence, useDragControls } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Maximize2, Minimize2 } from "lucide-react";
@@ -401,7 +401,6 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
   const messagesRef = useRef<ChatMessage[]>(messages);
   const isMobile = () => typeof window !== "undefined" && window.innerWidth < 768;
   const [isMaximized, setIsMaximized] = useState(false);
-  const dragControls = useDragControls();
 
   const [widgetSize, setWidgetSize] = useState(() => {
     if (typeof window === "undefined") return DEFAULT_WIDGET_SIZE;
@@ -417,80 +416,6 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
       return DEFAULT_WIDGET_SIZE;
     }
   });
-
-  const clampPosition = (pos: { x: number; y: number }, size: { width: number; height: number }) => {
-    if (typeof window === "undefined") return pos;
-    return {
-      x: Math.min(Math.max(pos.x, 16), window.innerWidth - size.width - 16),
-      y: Math.min(Math.max(pos.y, 16), window.innerHeight - size.height - 16),
-    };
-  };
-
-  const getDefaultPosition = (size: { width: number; height: number }) => {
-    if (typeof window === "undefined") return { x: 0, y: 0 };
-    return clampPosition({
-      x: window.innerWidth - size.width - 32,
-      y: window.innerHeight - size.height - 96
-    }, size);
-  };
-
-  const [widgetPosition, setWidgetPosition] = useState(() => {
-    let initialSize = DEFAULT_WIDGET_SIZE;
-    if (typeof window !== "undefined") {
-      try {
-        const savedSize = localStorage.getItem(AI_WIDGET_SIZE_KEY);
-        if (savedSize) {
-           const parsed = JSON.parse(savedSize);
-           initialSize = {
-             width: Math.max(MIN_WIDGET_SIZE.width, Number(parsed.width) || DEFAULT_WIDGET_SIZE.width),
-             height: Math.max(MIN_WIDGET_SIZE.height, Number(parsed.height) || DEFAULT_WIDGET_SIZE.height),
-           };
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-
-    try {
-      const saved = localStorage.getItem("flexfit_ai_widget_position");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
-          return clampPosition(parsed, initialSize);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    localStorage.removeItem("flexfit_ai_widget_position");
-    return getDefaultPosition(initialSize);
-  });
-
-  useEffect(() => {
-    if (!isOpen || isMobile() || isMaximized) return;
-    const handleResize = () => {
-      setWidgetPosition(prev => clampPosition(prev, widgetSize));
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isOpen, isMaximized, widgetSize]);
-
-  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: { offset: { x: number; y: number } }) => {
-    if (isMaximized || isMobile()) return;
-    setWidgetPosition((prev: { x: number; y: number }) => {
-      const next = clampPosition({ 
-        x: prev.x + info.offset.x, 
-        y: prev.y + info.offset.y 
-      }, widgetSize);
-      localStorage.setItem("flexfit_ai_widget_position", JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const handleResetPosition = () => {
-    localStorage.removeItem("flexfit_ai_widget_position");
-    setWidgetPosition(getDefaultPosition(widgetSize));
-  };
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -513,6 +438,7 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
     observer.observe(el);
     return () => observer.disconnect();
   }, [isOpen]);
+
 
   // Initialize History
   useEffect(() => {
@@ -754,69 +680,45 @@ export function AiChatBot({ isOpen, onClose }: AiChatBotProps) {
         {isOpen && (
           <motion.div
             ref={widgetRef}
-            drag={!isMobile() && !isMaximized}
-            dragControls={dragControls}
-            dragListener={false}
-            dragMomentum={false}
-            onDragEnd={handleDragEnd}
-            dragConstraints={
-              typeof window !== "undefined"
-                ? {
-                    left: 16 - widgetPosition.x,
-                    right: (window.innerWidth - widgetSize.width - 16) - widgetPosition.x,
-                    top: 16 - widgetPosition.y,
-                    bottom: (window.innerHeight - widgetSize.height - 16) - widgetPosition.y,
-                  }
-                : undefined
-            }
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ 
-              opacity: 1, 
-              scale: 1, 
-              x: 0, 
-              y: 0 
-            }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             style={
               isMobile()
                 ? undefined
                 : isMaximized
-                ? { width: "90vw", height: "90vh", resize: "none" }
+                ? {
+                    position: "fixed",
+                    right: 24,
+                    bottom: 16,
+                    width: "90vw",
+                    height: "90vh",
+                    resize: "none",
+                  }
                 : {
+                    position: "fixed",
+                    right: 24,
+                    bottom: 16,
                     width: widgetSize.width,
                     height: widgetSize.height,
                     minWidth: MIN_WIDGET_SIZE.width,
                     minHeight: MIN_WIDGET_SIZE.height,
-                    maxWidth: "90vw",
-                    maxHeight: "90vh",
+                    maxWidth: "min(90vw, 520px)",
+                    maxHeight: "calc(100vh - 40px)",
                     resize: "both",
-                    position: "fixed",
-                    left: widgetPosition.x,
-                    top: widgetPosition.y,
                   }
             }
             className={cn(
-              "fixed z-[100] flex flex-col bg-[#000000] text-zinc-100 border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.8)] rounded-2xl @container relative",
-              isMobile() 
-                ? "inset-4 bottom-24 max-h-[calc(100vh-120px)] overflow-hidden" 
-                : "overflow-hidden"
+              "z-[100] flex flex-col bg-[#000000] text-zinc-100 border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.8)] rounded-2xl @container overflow-hidden",
+              isMobile() && "fixed inset-4 bottom-24 max-h-[calc(100vh-120px)]"
             )}
           >
             {/* Main Area */}
             <div className="flex min-h-0 flex-1 flex-col bg-black h-full">
               {/* Header */}
               <header 
-                className={cn(
-                  "flex items-center justify-between px-4 h-14 shrink-0 border-b border-white/10 bg-gradient-to-b from-black/80 to-transparent",
-                  !isMobile() && !isMaximized && "cursor-grab active:cursor-grabbing"
-                )}
-                onPointerDown={(e) => {
-                  if (!isMobile() && !isMaximized) {
-                    dragControls.start(e);
-                  }
-                }}
-                onDoubleClick={handleResetPosition}
+                className="flex items-center justify-between px-4 h-14 shrink-0 border-b border-white/10 bg-gradient-to-b from-black/80 to-transparent"
               >
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#22c55e_0deg,#14b8a6_180deg,#3b82f6_360deg)] flex items-center justify-center p-0.5">

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldCheck, Users, Building2, DollarSign, Settings, LogOut, Menu, X, LayoutDashboard } from "lucide-react";
+import { ShieldCheck, Users, Building2, DollarSign, Settings, LogOut, Menu, X, LayoutDashboard, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PageTransition from "@/components/layout/PageTransition";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,9 +11,11 @@ const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Tổng quan", path: "/admin" },
   { icon: Users, label: "Người dùng", path: "/admin/users" },
   { icon: Building2, label: "Đối tác Gym", path: "/admin/partners" },
+  { icon: Sparkles, label: "Tiện ích", path: "/admin/amenities" },
   { icon: DollarSign, label: "Doanh thu", path: "/admin/revenue" },
   { icon: ShieldCheck, label: "Phê duyệt", path: "/admin/approvals" },
 ];
+
 
 export function AdminLayout() {
   const location = useLocation();
