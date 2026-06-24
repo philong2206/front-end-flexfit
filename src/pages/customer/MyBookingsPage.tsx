@@ -55,7 +55,13 @@ export default function MyBookingsPage() {
     const timer = setTimeout(() => {
       fetchBookings();
     }, 0);
-    return () => clearTimeout(timer);
+
+    const handleRealtimeRefresh = () => fetchBookings();
+    window.addEventListener("notifications:refresh", handleRealtimeRefresh);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("notifications:refresh", handleRealtimeRefresh);
+    };
   }, []);
 
   const now = new Date();

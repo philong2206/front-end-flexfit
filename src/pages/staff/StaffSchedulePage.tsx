@@ -32,6 +32,13 @@ export default function StaffSchedulePage() {
 
   }, []);
 
+  useEffect(() => {
+    const handleRealtimeRefresh = () => fetchClasses();
+
+    window.addEventListener("staff-schedule:refresh", handleRealtimeRefresh);
+    return () => window.removeEventListener("staff-schedule:refresh", handleRealtimeRefresh);
+  }, []);
+
   // FIX: Dùng toLocaleDateString("en-CA") thay vì toISOString() để tránh lệch timezone UTC vs VN
   const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD theo giờ địa phương VN
   const now = new Date();

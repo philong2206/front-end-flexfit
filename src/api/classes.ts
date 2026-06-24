@@ -15,6 +15,7 @@ export interface ClassDto {
   startTime: string;
   endTime: string;
   capacity: number;
+  remainingSeats?: number;
   creditCost: number;
   difficultyLevel?: string;
   caloriesBurnEstimate?: number;

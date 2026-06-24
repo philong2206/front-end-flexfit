@@ -82,6 +82,8 @@ export default function DashboardPage() {
     };
 
     void fetchBalance();
+    window.addEventListener("wallet-update", fetchBalance);
+    return () => window.removeEventListener("wallet-update", fetchBalance);
   }, [user?.userId]);
 
   useEffect(() => {

@@ -14,6 +14,7 @@ import { getUserByIdApi } from "@/api/users";
 import { toast } from "sonner";
 import { normalizeApiError, isInsufficientCreditsError } from "@/lib/normalizeApiError";
 import { FITNESS_FALLBACK_IMAGE, resolveFitnessImage } from "@/lib/imageFallbacks";
+import { useRealtimeEvent, useRealtimeGroups } from "@/hooks/useRealtime";
 import {
   buildNext7DateTabs,
   buildSlotDateTime,
@@ -53,6 +54,8 @@ interface ExploreSession {
   city?: string;
   sessionType?: string;
   availableSlots?: number;
+  remainingSeats?: number;
+  capacity?: number;
   coachName?: string;
 }
 
@@ -89,6 +92,30 @@ interface SelectedSlot {
 
 const ALL_CATEGORY = "Tất cả";
 const CLASS_FALLBACK_IMAGE = FITNESS_FALLBACK_IMAGE;
+
+type ClassCapacityUpdatedPayload = Record<string, unknown> & {
+  classId?: string;
+  ClassId?: string;
+  remainingSeats?: number;
+  RemainingSeats?: number;
+  availableSlots?: number;
+  AvailableSlots?: number;
+  capacity?: number;
+  Capacity?: number;
+};
+
+const getCapacityNumber = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  }
+  return undefined;
+};
+
+const filteredClassGroupsFromSessions = (sessions: ExploreSession[]) =>
+  sessions
+    .filter((session) => !session.isOpenGym && Boolean(session.classId))
+    .map((session) => `class-${session.classId}`);
 
 export default function ExplorePage() {
   const { user } = useAuth();
@@ -195,6 +222,54 @@ export default function ExplorePage() {
   const categories = useMemo(
     () => [ALL_CATEGORY, ...Array.from(new Set(sessions.map((session) => session.type).filter(Boolean)))],
     [sessions]
+  );
+  const classGroups = useMemo(
+    () => filteredClassGroupsFromSessions(sessions),
+    [sessions]
+  );
+
+  useRealtimeGroups(classGroups, classGroups.length > 0);
+  useRealtimeEvent<ClassCapacityUpdatedPayload>(
+    "ClassCapacityUpdated",
+    (payload) => {
+      const classId = String(payload?.classId || payload?.ClassId || "");
+      if (!classId) return;
+
+      const remainingSeats = getCapacityNumber(
+        payload.remainingSeats,
+        payload.RemainingSeats,
+        payload.availableSlots,
+        payload.AvailableSlots
+      );
+      const capacity = getCapacityNumber(payload.capacity, payload.Capacity);
+
+      setSessions((current) =>
+        current.map((session) =>
+          session.classId === classId || session.id === classId
+            ? {
+                ...session,
+                remainingSeats: remainingSeats ?? session.remainingSeats,
+                availableSlots: remainingSeats ?? session.availableSlots,
+                capacity: capacity ?? session.capacity,
+              }
+            : session
+        )
+      );
+
+      setBookingModal((current) => {
+        if (!current.classData || current.classData.classId !== classId) return current;
+        return {
+          ...current,
+          classData: {
+            ...current.classData,
+            remainingSeats: remainingSeats ?? current.classData.remainingSeats,
+            availableSlots: remainingSeats ?? current.classData.availableSlots,
+            capacity: capacity ?? current.classData.capacity,
+          },
+        };
+      });
+    },
+    classGroups.length > 0
   );
 
   const openBookingPicker = useCallback(
@@ -323,6 +398,9 @@ export default function ExplorePage() {
             district: branch?.district,
             city: branch?.city,
             coachName: cls.coachName,
+            remainingSeats: cls.remainingSeats,
+            availableSlots: cls.remainingSeats,
+            capacity: cls.capacity,
           };
         });
 
@@ -626,6 +704,8 @@ export default function ExplorePage() {
                 : `${formatTime(cls.startTime)} - ${formatTime(cls.endTime)}`;
               
               const isPastClass = !gym && cls.endTime ? new Date(cls.endTime) < new Date() : false;
+              const remainingSeats = !gym ? cls.remainingSeats : undefined;
+              const isClassFull = !gym && remainingSeats !== undefined && remainingSeats <= 0;
 
               return (
                 <motion.div 
@@ -681,6 +761,16 @@ export default function ExplorePage() {
                       <div className="absolute bottom-3 right-3 bg-white/10 backdrop-blur-md text-white font-medium px-3 py-1.5 rounded-full text-xs border border-white/10">
                         {cls.categoryName || cls.type}
                       </div>
+                      {!gym && remainingSeats !== undefined && (
+                        <div className={cn(
+                          "absolute top-3 left-3 backdrop-blur-md px-3 py-1.5 rounded-full border text-xs font-bold",
+                          remainingSeats > 0
+                            ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
+                            : "bg-red-500/20 border-red-500/30 text-red-300"
+                        )}>
+                          {remainingSeats > 0 ? `Còn ${remainingSeats} chỗ` : "Hết chỗ"}
+                        </div>
+                      )}
                     </div>
                     <CardContent className="p-6 flex flex-col flex-1">
                       <div className="mb-4">
@@ -715,13 +805,13 @@ export default function ExplorePage() {
 
                       <Button
                         className="w-full glow-btn rounded-xl h-11"
-                        disabled={!gym && isPastClass}
+                        disabled={!gym && (isPastClass || isClassFull)}
                         onClick={(e) => {
                           e.stopPropagation();
                           openBookingPicker(cls);
                         }}
                       >
-                        {!gym && isPastClass ? "Đã hết hạn" : "Đặt chỗ ngay"}
+                        {!gym && isPastClass ? "Đã hết hạn" : isClassFull ? "Hết chỗ" : "Đặt chỗ ngay"}
                       </Button>
                     </CardContent>
                   </Card>
@@ -1180,7 +1270,16 @@ export default function ExplorePage() {
                               <div className="h-px bg-white/5 my-2 w-full" />
                               <div className="flex justify-between items-center">
                                 <span className="text-muted-foreground">Trạng thái</span>
-                                <span className="text-green-400 font-bold">Còn chỗ</span>
+                                <span className={cn(
+                                  "font-bold",
+                                  (bookingModal.classData.remainingSeats ?? 1) > 0 ? "text-green-400" : "text-red-400"
+                                )}>
+                                  {bookingModal.classData.remainingSeats !== undefined
+                                    ? bookingModal.classData.remainingSeats > 0
+                                      ? `Còn ${bookingModal.classData.remainingSeats} chỗ`
+                                      : "Hết chỗ"
+                                    : "Còn chỗ"}
+                                </span>
                               </div>
                             </div>
                             <p className="text-xs text-muted-foreground text-center mb-4">
@@ -1201,7 +1300,11 @@ export default function ExplorePage() {
                           <Button
                             type="button"
                             className="flex-1 glow-btn"
-                            disabled={isOpenGym(bookingModal.classData) && !selectedSlot}
+                            disabled={
+                              isOpenGym(bookingModal.classData)
+                                ? !selectedSlot
+                                : (bookingModal.classData.remainingSeats ?? 1) <= 0
+                            }
                             onClick={() => {
                               // Nếu là class cố định, tự động set selectedSlot
                               const targetClass = bookingModal.classData!;
@@ -1313,7 +1416,11 @@ export default function ExplorePage() {
                             type="button"
                             className="flex-1 glow-btn"
                             onClick={handleBook}
-                            disabled={isBookingLoading || !selectedSlot}
+                            disabled={
+                              isBookingLoading ||
+                              !selectedSlot ||
+                              (!isOpenGym(bookingModal.classData) && (bookingModal.classData.remainingSeats ?? 1) <= 0)
+                            }
                           >
                             {isBookingLoading ? (
                               <>

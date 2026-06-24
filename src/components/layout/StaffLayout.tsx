@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Users, Calendar, Settings, LogOut, Menu, X, LayoutGrid, ScanLine, Ticket } from "lucide-react";
@@ -6,6 +6,24 @@ import { cn } from "@/lib/utils";
 import PageTransition from "@/components/layout/PageTransition";
 import { useAuth } from "@/contexts/AuthContext";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { getClassesForStaffApi } from "@/api/classes";
+import { useRealtimeEvents, useRealtimeGroups } from "@/hooks/useRealtime";
+
+const STAFF_BRANCH_EVENTS = [
+  "GymBookingCreated",
+  "GymBookingCancelled",
+  "ClassBookingCreated",
+  "ClassBookingCancelled",
+  "GymCheckInCreated",
+  "ClassCheckInCreated",
+  "GymCheckedIn",
+  "ClassCheckedIn",
+  "BookingCreated",
+  "BookingCancelled",
+  "CheckInCreated",
+  "StaffDashboardUpdated",
+  "BranchActivityUpdated",
+];
 
 const NAV_ITEMS = [
   { icon: LayoutGrid, label: "Tổng quan", path: "/staff" },
@@ -20,6 +38,38 @@ export function StaffLayout() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [branchIds, setBranchIds] = useState<string[]>([]);
+  const branchGroups = useMemo(() => branchIds.map((branchId) => `branch-${branchId}`), [branchIds]);
+
+  useEffect(() => {
+    let alive = true;
+
+    getClassesForStaffApi()
+      .then((classes) => {
+        if (!alive) return;
+        setBranchIds(Array.from(new Set(classes.map((item) => item.branchId).filter(Boolean))));
+      })
+      .catch((error) => {
+        if (import.meta.env.DEV) console.warn("[SignalR] Cannot resolve staff branch groups", error);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useRealtimeGroups(branchGroups, branchGroups.length > 0);
+  useRealtimeEvents(
+    STAFF_BRANCH_EVENTS,
+    () => {
+      window.dispatchEvent(new Event("staff-dashboard:refresh"));
+      window.dispatchEvent(new Event("staff-bookings:refresh"));
+      window.dispatchEvent(new Event("staff-checkins:refresh"));
+      window.dispatchEvent(new Event("staff-schedule:refresh"));
+      window.dispatchEvent(new Event("notifications:refresh"));
+    },
+    branchGroups.length > 0
+  );
 
   const handleLogout = () => {
     logout();

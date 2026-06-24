@@ -87,7 +87,17 @@ export default function MembershipPage() {
       fetchHistory();
       fetchCreditHistory();
     }, 0);
-    return () => clearTimeout(timer);
+
+    const handleCreditRefresh = () => {
+      fetchHistory();
+      fetchCreditHistory();
+    };
+
+    window.addEventListener("credit-history:refresh", handleCreditRefresh);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("credit-history:refresh", handleCreditRefresh);
+    };
   }, [user]);
 
   const handleBuy = async (pkg: CreditPackageResponse) => {

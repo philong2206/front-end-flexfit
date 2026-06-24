@@ -178,6 +178,21 @@ export default function StaffCheckInPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const handleRealtimeRefresh = async () => {
+      const bookings = await fetchAllBookings();
+      await fetchRecentLogs(bookings);
+    };
+
+    window.addEventListener("staff-bookings:refresh", handleRealtimeRefresh);
+    window.addEventListener("staff-checkins:refresh", handleRealtimeRefresh);
+    return () => {
+      window.removeEventListener("staff-bookings:refresh", handleRealtimeRefresh);
+      window.removeEventListener("staff-checkins:refresh", handleRealtimeRefresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const startCamera = async () => {
     try {
       setCameraError(null);

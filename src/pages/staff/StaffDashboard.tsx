@@ -139,6 +139,15 @@ export default function StaffDashboard() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  useEffect(() => {
+    const handleRealtimeRefresh = () => {
+      fetchDashboardData();
+    };
+
+    window.addEventListener("staff-dashboard:refresh", handleRealtimeRefresh);
+    return () => window.removeEventListener("staff-dashboard:refresh", handleRealtimeRefresh);
+  }, [fetchDashboardData]);
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchCode.trim()) {

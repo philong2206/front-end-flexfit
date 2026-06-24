@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from "r
 import { AnimatePresence } from "framer-motion";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Toaster } from "sonner";
+import { toast } from "sonner";
 
 // Layouts
 import { MemberLayout } from "@/components/layout/MemberLayout";
@@ -11,6 +12,8 @@ import { AdminLayout } from "@/components/layout/AdminLayout";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { StaffLayout } from "@/components/layout/StaffLayout";
 import PageTransition from "@/components/layout/PageTransition";
+import { useRealtimeConnection, useRealtimeEvent, useRealtimeGroups } from "@/hooks/useRealtime";
+import { useResolvedUserId } from "@/hooks/useResolvedUserId";
 
 // Shared Pages
 import LandingPage from "@/pages/public/LandingPage";
@@ -87,6 +90,65 @@ function LazyAiCoachGlobal() {
       <AiCoachGlobal />
     </Suspense>
   );
+}
+
+type RealtimeNotificationPayload = Record<string, unknown> & {
+  title?: string;
+  Title?: string;
+  message?: string;
+  Message?: string;
+  content?: string;
+  Content?: string;
+};
+
+type CreditUpdatedPayload = Record<string, unknown> & {
+  balance?: number;
+  Balance?: number;
+  newBalance?: number;
+  NewBalance?: number;
+};
+
+function RealtimeBridge() {
+  const { user, role, isAuthenticated } = useAuth();
+  const userId = useResolvedUserId(user);
+  const enabled = isAuthenticated && Boolean(userId);
+
+  useRealtimeConnection(enabled);
+  useRealtimeGroups(
+    [
+      userId ? `user-${userId}` : null,
+      role === "partner" && userId ? `owner-${userId}` : null,
+    ],
+    enabled
+  );
+
+  useRealtimeEvent<RealtimeNotificationPayload>(
+    "ReceiveNotification",
+    (payload) => {
+      window.dispatchEvent(new Event("notifications:refresh"));
+
+      const title = String(payload?.title || payload?.Title || "Thông báo mới");
+      const message = String(payload?.message || payload?.Message || payload?.content || payload?.Content || "");
+      toast.info(title, message ? { description: message } : undefined);
+    },
+    enabled
+  );
+
+  useRealtimeEvent<CreditUpdatedPayload>(
+    "CreditUpdated",
+    (payload) => {
+      window.dispatchEvent(new Event("wallet-update"));
+      window.dispatchEvent(new Event("credit-history:refresh"));
+
+      const balance = payload?.balance ?? payload?.Balance ?? payload?.newBalance ?? payload?.NewBalance;
+      toast.success("Credit đã được cập nhật", {
+        description: typeof balance === "number" ? `Số dư mới: ${balance} Credit` : undefined,
+      });
+    },
+    enabled
+  );
+
+  return null;
 }
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) {
@@ -187,6 +249,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
+        <RealtimeBridge />
         <AnimatedRoutes />
         <LazyAiCoachGlobal />
       </Router>
