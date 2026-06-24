@@ -204,7 +204,7 @@ export const getPartnerClassBookingsApi = async () => {
   return response.json();
 };
 
-export const getStaffCheckInBookingsApi = async () => {
+export const getStaffCheckInBookingsApi = async (): Promise<BookingResponse[]> => {
   const response = await fetch(`${API_URL}/staff/check-in`, {
     method: "GET",
     headers: getAuthHeaders(),
