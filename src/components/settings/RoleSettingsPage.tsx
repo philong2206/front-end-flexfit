@@ -26,6 +26,7 @@ type RoleSettingsPageProps = {
   stats: SettingsStat[];
   statsLoading?: boolean;
   profileExtra?: ReactNode;
+  mainExtra?: ReactNode;
 };
 
 const getStoredUser = (): AuthUser | null => {
@@ -63,6 +64,7 @@ export function RoleSettingsPage({
   stats,
   statsLoading = false,
   profileExtra,
+  mainExtra,
 }: RoleSettingsPageProps) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -166,6 +168,7 @@ export function RoleSettingsPage({
               </div>
             </CardContent>
           </Card>
+          {mainExtra}
         </div>
       </div>
     </div>
