@@ -147,7 +147,7 @@ export function PublicLayout() {
             <p>© 2026 FlexFit Inc. All rights reserved.</p>
             <div className="flex gap-4 mt-4 md:mt-0">
               <a href="https://www.facebook.com/profile.php?id=61590321338470" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Facebook</a>
-              <a href="#" className="hover:text-white transition-colors">Instagram</a>
+              <a href="https://www.instagram.com/flexfit.vietnam/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Instagram</a>
               <a href="#" className="hover:text-white transition-colors">Twitter</a>
             </div>
           </div>
