@@ -118,8 +118,8 @@ export const createClassApi = async (data: CreateClassRequest): Promise<{ messag
 
     const validationErrors = result.errors
       ? Object.entries(result.errors)
-          .map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`)
-          .join("\n")
+        .map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`)
+        .join("\n")
       : "";
 
     throw new Error(

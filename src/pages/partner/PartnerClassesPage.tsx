@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, Loader2, Plus, Trash2, Edit, Eye, Filter } from "lucide-react";
+import { BookOpen, Loader2, Plus, Trash2, Edit, Eye, Filter, Image as ImageIcon, Upload } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -20,6 +20,7 @@ import type { BranchDto } from "@/api/branches";
 import { getPartnerClasses, getPartnerBranches } from "@/services/partnerApi";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { resolveFitnessImage } from "@/lib/imageFallbacks";
 
 type ClassStatus = "Open" | "Cancelled" | "Completed";
 import DatePicker from "react-datepicker";
@@ -195,6 +196,27 @@ export default function PartnerClassesPage() {
     } finally {
       setFormLoading(false);
     }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn tệp hình ảnh');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Kích thước ảnh không được vượt quá 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormData({ ...formData, thumbnailUrl: reader.result as string });
+    };
+    reader.readAsDataURL(file);
   };
 
   // Submit form
@@ -387,9 +409,18 @@ export default function PartnerClassesPage() {
                     return (
                       <tr key={cls.classId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="px-4 py-4 font-medium text-white">
-                          <div>
-                            <div className="font-bold">{cls.className}</div>
-                            <div className="text-xs text-muted-foreground mt-0.5">{cls.branchName}</div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-white/5">
+                              <img
+                                src={resolveFitnessImage(cls.thumbnailUrl)}
+                                alt={cls.className}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div>
+                              <div className="font-bold">{cls.className}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5">{cls.branchName}</div>
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-4">{cls.coachName || "Chưa có"}</td>
@@ -738,13 +769,50 @@ export default function PartnerClassesPage() {
               )}
             </div>
             <div>
-              <Label>Thumbnail URL</Label>
-              <Input
-                value={formData.thumbnailUrl || ""}
-                onChange={(e) => setFormData({ ...formData, thumbnailUrl: e.target.value })}
-                className="bg-background border-white/10"
-                placeholder="https://..."
-              />
+              <Label>Ảnh nền lớp học</Label>
+              <div className="mt-2 flex flex-col items-center gap-4">
+                <div className="relative w-full h-48 rounded-xl overflow-hidden border-2 border-dashed border-white/10 flex items-center justify-center bg-black/20 group">
+                  {formData.thumbnailUrl ? (
+                    <>
+                      <img
+                        src={resolveFitnessImage(formData.thumbnailUrl)}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => document.getElementById('class-image-upload')?.click()}
+                        >
+                          <Upload className="w-4 h-4 mr-2" /> Thay đổi ảnh
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center text-muted-foreground">
+                      <ImageIcon className="w-12 h-12 mb-2 opacity-20" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => document.getElementById('class-image-upload')?.click()}
+                      >
+                        <Upload className="w-4 h-4 mr-2" /> Tải ảnh lên
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <input
+                  id="class-image-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageChange}
+                />
+                <p className="text-[10px] text-muted-foreground italic">
+                  * Ảnh nền sẽ được hiển thị khi khách hàng khám phá lớp học. Dung lượng tối đa 5MB.
+                </p>
+              </div>
             </div>
           </div>
           <DialogFooter>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Building2, Loader2, Plus, Edit, Trash2, MapPin } from "lucide-react";
+import { Building2, Loader2, Plus, Edit, Trash2, MapPin, Image as ImageIcon, Upload } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -10,13 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { toast } from "sonner";
 import type { GymDto } from "@/api/gyms";
-import type { BranchDto, CreateBranchRequest, UpdateBranchRequest } from "@/api/branches";
-import { createBranchApi, updateBranchApi, deleteBranchApi, changeBranchStatusApi } from "@/api/branches";
+import { createBranchApi, updateBranchApi, deleteBranchApi, changeBranchStatusApi, updateBranchImagesApi, updateBranchAmenitiesApi, type BranchDto, type BranchImageDto, type CreateBranchRequest, type UpdateBranchRequest } from "@/api/branches";
 import { getPartnerGyms, getPartnerBranches } from "@/services/partnerApi";
+import { getAmenitiesApi, type AmenityDto } from "@/api/amenities";
+import { resolveFitnessImage } from "@/lib/imageFallbacks";
+import { Badge } from "@/components/ui/badge";
+import { Check } from "lucide-react";
 
 export default function PartnerGymsPage() {
   const [gyms, setGyms] = useState<GymDto[]>([]);
   const [branches, setBranches] = useState<BranchDto[]>([]);
+  const [amenities, setAmenities] = useState<AmenityDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,6 +28,8 @@ export default function PartnerGymsPage() {
     open: false, mode: "create", branchId: null
   });
   const [formData, setFormData] = useState<Partial<CreateBranchRequest & UpdateBranchRequest>>({});
+  const [galleryImages, setGalleryImages] = useState<BranchImageDto[]>([]);
+  const [isGalleryModified, setIsGalleryModified] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean, branchId: string | null }>({ open: false, branchId: null });
@@ -32,12 +38,14 @@ export default function PartnerGymsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [gymData, branchData] = await Promise.all([
+      const [gymData, branchData, amenityData] = await Promise.all([
         getPartnerGyms(),
-        getPartnerBranches()
+        getPartnerBranches(),
+        getAmenitiesApi()
       ]);
       setGyms(gymData);
       setBranches(branchData);
+      setAmenities(amenityData);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Không thể tải danh sách dữ liệu";
       setError(message);
@@ -66,12 +74,16 @@ export default function PartnerGymsPage() {
       closeTime: "22:00:00",
       thumbnailUrl: "",
       creditCost: 1,
+      amenityIds: [],
     });
+    setGalleryImages([]);
+    setIsGalleryModified(false);
     setFormDialog({ open: true, mode: "create", branchId: null });
   };
 
   const handleEdit = (branch: BranchDto) => {
     setFormData({
+      gymId: branch.gymId,
       branchName: branch.branchName,
       address: branch.address,
       city: branch.city,
@@ -80,7 +92,10 @@ export default function PartnerGymsPage() {
       closeTime: branch.closeTime,
       thumbnailUrl: branch.thumbnailUrl,
       creditCost: branch.creditCost,
+      amenityIds: branch.amenities?.map(a => a.amenityId) || [],
     });
+    setGalleryImages(branch.images || []);
+    setIsGalleryModified(false);
     setFormDialog({ open: true, mode: "edit", branchId: branch.branchId });
   };
 
@@ -101,16 +116,68 @@ export default function PartnerGymsPage() {
       const closeParts = formData.closeTime.split(":");
       const openMinutes = parseInt(openParts[0]) * 60 + parseInt(openParts[1] || "0");
       const closeMinutes = parseInt(closeParts[0]) * 60 + parseInt(closeParts[1] || "0");
-      
+
       if (openMinutes >= closeMinutes) {
         throw new Error("Giờ mở cửa phải trước giờ đóng cửa");
       }
 
+      let branchId = formDialog.branchId;
+
       if (formDialog.mode === "create") {
-        await createBranchApi(formData as CreateBranchRequest);
+        // Chế độ tạo mới: tạo branch trước để lấy ID, sau đó cập nhật ảnh
+        const res = await createBranchApi(formData as CreateBranchRequest);
+        branchId = typeof res === 'string' ? res : (res.branchId || res.id);
         toast.success("Thêm cơ sở thành công");
+
+        // Cập nhật gallery sau khi tạo branch
+        if (branchId && galleryImages.length > 0) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await updateBranchImagesApi(branchId, { images: galleryImages });
+          } catch (imgErr) {
+            console.error("Lỗi cập nhật gallery:", imgErr);
+            const errorMsg = imgErr instanceof Error ? imgErr.message : "";
+            toast.error(`Cơ sở đã được tạo, nhưng cập nhật ảnh thất bại. Lỗi: ${errorMsg}`);
+          }
+        }
+
+        // Cập nhật tiện ích sau khi tạo branch
+        if (branchId && formData.amenityIds && formData.amenityIds.length > 0) {
+          try {
+            await updateBranchAmenitiesApi(branchId, { amenityIds: formData.amenityIds });
+          } catch (amErr) {
+            console.error("Lỗi cập nhật tiện ích:", amErr);
+            toast.error("Cơ sở đã được tạo, nhưng cập nhật tiện ích thất bại.");
+          }
+        }
       } else if (formDialog.branchId) {
+        // Chế độ chỉnh sửa: cập nhật ảnh TRƯỚC (concurrency token chưa thay đổi),
+        // sau đó mới cập nhật thông tin branch
+        if (isGalleryModified) {
+          try {
+            console.log("Đang cập nhật gallery cho branchId:", formDialog.branchId);
+            await updateBranchImagesApi(formDialog.branchId, { images: galleryImages });
+          } catch (imgErr) {
+            console.error("Lỗi cập nhật gallery:", imgErr);
+            const errorMsg = imgErr instanceof Error ? imgErr.message : "";
+            toast.error(`Cập nhật bộ sưu tập ảnh thất bại. Lỗi: ${errorMsg}`);
+          }
+          // Delay nhỏ để backend xử lý xong images trước khi cập nhật branch
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
         await updateBranchApi(formDialog.branchId, formData as UpdateBranchRequest);
+
+        // Cập nhật tiện ích
+        if (formData.amenityIds) {
+          try {
+            await updateBranchAmenitiesApi(formDialog.branchId, { amenityIds: formData.amenityIds });
+          } catch (amErr) {
+            console.error("Lỗi cập nhật tiện ích:", amErr);
+            toast.error("Cập nhật tiện ích thất bại");
+          }
+        }
+
         toast.success("Cập nhật cơ sở thành công");
       }
 
@@ -148,6 +215,80 @@ export default function PartnerGymsPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Đổi trạng thái thất bại");
     }
+  };
+
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+
+          if (width > height && width > maxDim) {
+            height *= maxDim / width;
+            width = maxDim;
+          } else if (height > maxDim) {
+            width *= maxDim / height;
+            height = maxDim;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setFormData({ ...formData, thumbnailUrl: compressed });
+    } catch (err) {
+      toast.error("Lỗi xử lý ảnh");
+    }
+  };
+
+  const handleGalleryChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setIsGalleryModified(true); // Đánh dấu là gallery đã thay đổi
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name} không phải là hình ảnh`);
+        continue;
+      }
+      try {
+        const compressed = await compressImage(file);
+        setGalleryImages((prev) => [
+          ...prev,
+          { imageUrl: compressed, displayOrder: prev.length }
+        ]);
+      } catch (err) {
+        toast.error(`Lỗi xử lý ảnh: ${file.name}`);
+      }
+    }
+  };
+
+  const removeGalleryImage = (index: number) => {
+    setIsGalleryModified(true); // Đánh dấu là gallery đã thay đổi
+    setGalleryImages((prev) => {
+      const filtered = prev.filter((_, i) => i !== index);
+      return filtered.map((img, i) => ({ ...img, displayOrder: i }));
+    });
   };
 
   return (
@@ -205,7 +346,21 @@ export default function PartnerGymsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <Card className="bg-secondary border-white/5 hover:border-primary/30 transition-all">
+                <Card className="bg-secondary border-white/5 hover:border-primary/30 transition-all overflow-hidden">
+                  <div className="h-40 w-full overflow-hidden relative group">
+                    <img
+                      src={resolveFitnessImage(branch.thumbnailUrl)}
+                      alt={branch.branchName}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    {branch.images && branch.images.length > 0 && (
+                      <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1.5 text-white shadow-xl">
+                        <ImageIcon className="w-3 h-3 text-primary" />
+                        <span className="text-[10px] font-bold">{branch.images.length}</span>
+                      </div>
+                    )}
+                  </div>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-white flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
@@ -213,17 +368,17 @@ export default function PartnerGymsPage() {
                         <span className="line-clamp-2">{branch.branchName}</span>
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleEdit(branch)}
                           className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 h-8 w-8 p-0"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleDeleteBranch(branch.branchId)}
                           className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8 p-0"
                         >
@@ -251,15 +406,30 @@ export default function PartnerGymsPage() {
                           <span className="text-primary">{branch.creditCost}</span> Credit
                         </span>
                       </div>
+
+                      {branch.amenities && branch.amenities.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {branch.amenities.slice(0, 3).map((a) => (
+                            <Badge key={a.amenityId} variant="outline" className="text-[10px] py-0 px-1.5 bg-primary/5 border-primary/20 text-primary-foreground/80">
+                              {a.amenityName}
+                            </Badge>
+                          ))}
+                          {branch.amenities.length > 3 && (
+                            <span className="text-[10px] text-muted-foreground flex items-center">
+                              +{branch.amenities.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       <div className="pt-2 border-t border-white/5 flex items-center justify-between">
                         <span className="text-muted-foreground">Trạng thái:</span>
                         <button
                           onClick={() => handleChangeStatus(branch.branchId, branch.isActive)}
-                          className={`px-3 py-1 rounded-full text-xs font-bold tracking-wider transition-colors ${
-                            branch.isActive 
-                              ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
-                              : 'bg-gray-500/20 text-gray-400 hover:bg-gray-500/30'
-                          }`}
+                          className={`px-3 py-1 rounded-full text-xs font-bold tracking-wider transition-colors ${branch.isActive
+                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            : 'bg-gray-500/20 text-gray-400 hover:bg-gray-500/30'
+                            }`}
                         >
                           {branch.isActive ? 'HOẠT ĐỘNG' : 'TẠM DỪNG'}
                         </button>
@@ -285,8 +455,8 @@ export default function PartnerGymsPage() {
             {formDialog.mode === "create" && (
               <div>
                 <Label>Thuộc phòng gym *</Label>
-                <Select 
-                  value={formData.gymId || ""} 
+                <Select
+                  value={formData.gymId || ""}
                   onValueChange={(val) => setFormData({ ...formData, gymId: val })}
                 >
                   <SelectTrigger className="bg-background border-white/10">
@@ -304,8 +474,8 @@ export default function PartnerGymsPage() {
             )}
             <div>
               <Label>Tên chi nhánh *</Label>
-              <Input 
-                value={formData.branchName || ""} 
+              <Input
+                value={formData.branchName || ""}
                 onChange={(e) => setFormData({ ...formData, branchName: e.target.value })}
                 className="bg-background border-white/10"
                 placeholder="Ví dụ: FlexFit Quận 1"
@@ -313,8 +483,8 @@ export default function PartnerGymsPage() {
             </div>
             <div>
               <Label>Địa chỉ *</Label>
-              <Input 
-                value={formData.address || ""} 
+              <Input
+                value={formData.address || ""}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 className="bg-background border-white/10"
                 placeholder="Số nhà, tên đường..."
@@ -323,8 +493,8 @@ export default function PartnerGymsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Quận/huyện *</Label>
-                <Input 
-                  value={formData.district || ""} 
+                <Input
+                  value={formData.district || ""}
                   onChange={(e) => setFormData({ ...formData, district: e.target.value })}
                   className="bg-background border-white/10"
                   placeholder="Ví dụ: Quận 1"
@@ -332,8 +502,8 @@ export default function PartnerGymsPage() {
               </div>
               <div>
                 <Label>Thành phố *</Label>
-                <Input 
-                  value={formData.city || ""} 
+                <Input
+                  value={formData.city || ""}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   className="bg-background border-white/10"
                   placeholder="Ví dụ: TP. Hồ Chí Minh"
@@ -343,20 +513,20 @@ export default function PartnerGymsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Giờ mở cửa *</Label>
-                <Input 
+                <Input
                   type="time"
                   step="1"
-                  value={formData.openTime?.slice(0, 8) || "06:00:00"} 
+                  value={formData.openTime?.slice(0, 8) || "06:00:00"}
                   onChange={(e) => setFormData({ ...formData, openTime: e.target.value.length === 5 ? `${e.target.value}:00` : e.target.value })}
                   className="bg-background border-white/10 [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
                 />
               </div>
               <div>
                 <Label>Giờ đóng cửa *</Label>
-                <Input 
+                <Input
                   type="time"
                   step="1"
-                  value={formData.closeTime?.slice(0, 8) || "22:00:00"} 
+                  value={formData.closeTime?.slice(0, 8) || "22:00:00"}
                   onChange={(e) => setFormData({ ...formData, closeTime: e.target.value.length === 5 ? `${e.target.value}:00` : e.target.value })}
                   className="bg-background border-white/10 [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
                 />
@@ -364,34 +534,158 @@ export default function PartnerGymsPage() {
             </div>
             <div>
               <Label>Credit tiêu chuẩn (Open Gym) *</Label>
-              <Input 
+              <Input
                 type="number"
-                value={formData.creditCost || 0} 
+                value={formData.creditCost || 0}
                 onChange={(e) => setFormData({ ...formData, creditCost: parseInt(e.target.value) || 0 })}
                 className="bg-background border-white/10"
                 min={0}
               />
             </div>
+
+            {/* Amenities Section */}
+            <div className="pt-4 border-t border-white/5">
+              <Label className="text-white font-bold text-lg mb-4 block">Tiện ích cơ sở</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {amenities.map((amenity) => {
+                  const isChecked = formData.amenityIds?.includes(amenity.amenityId);
+                  return (
+                    <div
+                      key={amenity.amenityId}
+                      onClick={() => {
+                        const currentIds = formData.amenityIds || [];
+                        const newIds = isChecked
+                          ? currentIds.filter(id => id !== amenity.amenityId)
+                          : [...currentIds, amenity.amenityId];
+                        setFormData({ ...formData, amenityIds: newIds });
+                      }}
+                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${isChecked
+                        ? 'bg-primary/10 border-primary/50 text-white'
+                        : 'bg-black/20 border-white/10 text-muted-foreground hover:border-white/20'
+                        }`}
+                    >
+                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isChecked
+                        ? 'bg-primary border-primary text-white'
+                        : 'border-white/20 group-hover:border-white/40'
+                        }`}>
+                        {isChecked && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-medium leading-none">{amenity.amenityName}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {amenities.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">Đang tải danh sách tiện ích...</p>
+              )}
+            </div>
+
             <div>
-              <Label>URL Ảnh đại diện</Label>
-              <Input 
-                value={formData.thumbnailUrl || ""} 
-                onChange={(e) => setFormData({ ...formData, thumbnailUrl: e.target.value })}
-                className="bg-background border-white/10"
-                placeholder="https://..."
+              <Label>Ảnh đại diện cơ sở</Label>
+              <div className="mt-2 flex flex-col items-center gap-4">
+                <div className="relative w-full h-48 rounded-xl overflow-hidden border-2 border-dashed border-white/10 flex items-center justify-center bg-black/20 group">
+                  {formData.thumbnailUrl ? (
+                    <>
+                      <img
+                        src={resolveFitnessImage(formData.thumbnailUrl)}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => document.getElementById('branch-image-upload')?.click()}
+                        >
+                          <Upload className="w-4 h-4 mr-2" /> Thay đổi ảnh
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center text-muted-foreground">
+                      <ImageIcon className="w-12 h-12 mb-2 opacity-20" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => document.getElementById('branch-image-upload')?.click()}
+                      >
+                        <Upload className="w-4 h-4 mr-2" /> Tải ảnh lên
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <input
+                  id="branch-image-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageChange}
+                />
+                <p className="text-[10px] text-muted-foreground italic">
+                  * Hệ thống sẽ lưu trữ ảnh đại diện của cơ sở. Dung lượng tối đa 5MB.
+                </p>
+              </div>
+            </div>
+
+            {/* Gallery Section */}
+            <div className="pt-4 border-t border-white/5">
+              <Label className="text-white font-bold text-lg mb-4 block">Bộ sưu tập ảnh (Gallery)</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {galleryImages.map((img, index) => (
+                  <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group bg-black/20">
+                    <img
+                      src={resolveFitnessImage(img.imageUrl)}
+                      alt={`Gallery ${index}`}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-1 left-1 bg-black/60 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
+                      {img.displayOrder + 1}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeGalleryImage(index)}
+                      className="absolute top-1 right-1 bg-red-500/80 hover:bg-red-600 rounded-full w-6 h-6 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('gallery-upload')?.click()}
+                  className="aspect-square rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-2 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                    <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
+                  </div>
+                  <span className="text-xs text-muted-foreground group-hover:text-primary font-medium">Thêm ảnh</span>
+                </button>
+              </div>
+              <input
+                id="gallery-upload"
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={handleGalleryChange}
               />
+              <p className="text-[10px] text-muted-foreground mt-3">
+                * Thêm nhiều ảnh để khách hàng có cái nhìn chi tiết về cơ sở. Ảnh được sắp xếp theo thứ tự bạn thêm vào.
+              </p>
             </div>
           </div>
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setFormDialog({ open: false, mode: "create", branchId: null })}
               disabled={formLoading}
             >
               Hủy
             </Button>
-            <Button 
-              onClick={handleSubmit} 
+            <Button
+              onClick={handleSubmit}
               disabled={formLoading}
               className="bg-primary hover:bg-primary/90"
             >
