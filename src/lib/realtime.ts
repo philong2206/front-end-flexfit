@@ -2,7 +2,7 @@ import * as signalR from "@microsoft/signalr";
 
 type RealtimeHandler<T = unknown> = (payload: T) => void;
 
-const DEFAULT_HUB_PATH = "/notificationHub";
+const DEFAULT_HUB_PATH = "/hubs/notifications";
 const GROUP_JOIN_METHODS = ["JoinGroup", "SubscribeToGroup", "AddToGroup"];
 const GROUP_LEAVE_METHODS = ["LeaveGroup", "UnsubscribeFromGroup", "RemoveFromGroup"];
 
@@ -30,9 +30,10 @@ const getConnection = () => {
   if (connection) return connection;
 
   connection = new signalR.HubConnectionBuilder()
-    .withUrl(buildHubUrl(), {
-      accessTokenFactory: () => localStorage.getItem("access_token") || "",
-    })
+  .withUrl(buildHubUrl(), {
+  accessTokenFactory: () =>
+    (localStorage.getItem("access_token") || "").replace(/^Bearer\s+/i, ""),
+})
     .withAutomaticReconnect()
     .configureLogging(import.meta.env.DEV ? signalR.LogLevel.Information : signalR.LogLevel.Warning)
     .build();
