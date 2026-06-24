@@ -3,11 +3,11 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  Users, 
-  Calendar, 
-  QrCode, 
-  CheckSquare, 
+import {
+  Users,
+  Calendar,
+  QrCode,
+  CheckSquare,
   Loader2,
   Clock,
   Search
@@ -21,7 +21,8 @@ import { Link } from "react-router-dom";
 // Real APIs
 import { getLogsForManagerApi, type CheckInLogDto } from "@/api/checkInLog";
 import { getClassesForStaffApi, type ClassDto } from "@/api/classes";
-import { getAllUsersApi } from "@/api/users";
+import { getAllUsersApi, type UserDto } from "@/api/users";
+import { getStaffCheckInBookingsApi, type BookingResponse } from "@/api/bookings";
 
 const getDateKey = (value: string | undefined | null) => {
   if (!value) return "";
@@ -77,7 +78,7 @@ export default function StaffDashboard() {
   const { user } = useAuth();
   const [searchCode, setSearchCode] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  
+
   // States for aggregated data
   const [stats, setStats] = useState({
     todayCheckIns: 0,
@@ -87,7 +88,7 @@ export default function StaffDashboard() {
   });
   const [recentCheckIns, setRecentCheckIns] = useState<CheckInLogDto[]>([]);
   const [todayClasses, setTodayClasses] = useState<ClassDto[]>([]);
-  
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,21 +99,32 @@ export default function StaffDashboard() {
     try {
       setLoading(true);
       setError(null);
-      
-      const [logsData, classesData, usersData] = await Promise.all([
+
+      const [logsData, classesData, usersData, bookingsData] = await Promise.all([
         getLogsForManagerApi().catch(() => [] as CheckInLogDto[]),
         getClassesForStaffApi().catch(() => [] as ClassDto[]),
-        getAllUsersApi().catch(() => []),
+        getAllUsersApi().catch(() => [] as UserDto[]),
+        getStaffCheckInBookingsApi().catch(() => [] as BookingResponse[]),
       ]);
+
+      // Identify unique user IDs who have interacted with this branch
+      const branchUserIds = new Set<string>();
+      logsData.forEach(log => { if (log.userId) branchUserIds.add(log.userId); });
+      bookingsData.forEach(booking => {
+        if (booking.userEmail) {
+          const user = (usersData as UserDto[]).find(u => u.email === booking.userEmail);
+          if (user) branchUserIds.add(user.userId);
+        }
+      });
 
       const today = getDateKey(new Date().toISOString());
       const realLogs = logsData
         .filter(hasRealCheckIn)
         .sort((a, b) => new Date(getCheckInTime(b) || 0).getTime() - new Date(getCheckInTime(a) || 0).getTime());
-      
+
       // Calculate today checkins
       const todayLogs = realLogs.filter(log => getDateKey(getCheckInTime(log)) === today);
-      
+
       // Calculate classes tonight
       const todayCls = classesData
         .filter(c => getDateKey(c.startTime) === today)
@@ -122,7 +134,7 @@ export default function StaffDashboard() {
         todayCheckIns: todayLogs.length,
         membersInGym: todayLogs.filter(l => l.status === "Success").length, // Simplification for active members
         classesTonight: todayCls.length,
-        totalMembers: usersData.length,
+        totalMembers: branchUserIds.size,
       });
 
       setRecentCheckIns(realLogs.slice(0, 5));
@@ -162,7 +174,7 @@ export default function StaffDashboard() {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1,2,3,4].map(i => (
+          {[1, 2, 3, 4].map(i => (
             <Card key={i} className="bg-secondary border-white/5 h-32 rounded-2xl">
               <CardContent className="pt-6">
                 <Skeleton className="h-4 w-32 mb-4" />
@@ -177,7 +189,7 @@ export default function StaffDashboard() {
 
   if (error) {
     return (
-      <ErrorState 
+      <ErrorState
         title="Lỗi tải dữ liệu"
         message={error}
         onRetry={fetchDashboardData}
@@ -255,7 +267,7 @@ export default function StaffDashboard() {
 
       {/* Main Grid: Check-in scanner tool & Today's classes */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0 overflow-visible">
-        
+
         {/* Left Side: Check-in scanner tool */}
         <div className="lg:col-span-2 space-y-6 min-w-0 overflow-visible">
           <Card className="bg-secondary border-white/5 overflow-visible rounded-2xl hover:shadow-xl transition-all duration-300">
@@ -277,9 +289,9 @@ export default function StaffDashboard() {
                     className="w-full bg-black/50 border border-white/10 rounded-xl h-12 pl-12 pr-4 text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm uppercase tracking-wider font-semibold"
                   />
                 </div>
-                <Button 
-                  type="submit" 
-                  disabled={isSearching} 
+                <Button
+                  type="submit"
+                  disabled={isSearching}
                   className="bg-primary text-primary-foreground hover:bg-primary/95 px-6 rounded-xl font-medium shrink-0 h-12"
                 >
                   {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Tìm kiếm"}
@@ -287,7 +299,7 @@ export default function StaffDashboard() {
               </form>
               <div className="flex gap-4">
                 <Button asChild variant="outline" className="flex-1 bg-white/5 hover:bg-white/10 text-white border-white/10">
-                   <Link to="/staff/checkin">Đi đến trang Check-in chuyên dụng</Link>
+                  <Link to="/staff/checkin">Đi đến trang Check-in chuyên dụng</Link>
                 </Button>
               </div>
             </CardContent>
@@ -307,10 +319,10 @@ export default function StaffDashboard() {
             <CardContent>
               {todayClasses.length === 0 ? (
                 <div className="py-8">
-                  <EmptyState 
-                    icon={Calendar} 
-                    title="Chưa có lớp học hôm nay" 
-                    description="Hiện tại không có lớp học nào được lên lịch cho hôm nay." 
+                  <EmptyState
+                    icon={Calendar}
+                    title="Chưa có lớp học hôm nay"
+                    description="Hiện tại không có lớp học nào được lên lịch cho hôm nay."
                   />
                 </div>
               ) : (
@@ -333,9 +345,9 @@ export default function StaffDashboard() {
                             <span className="px-2 py-1 bg-primary/20 text-primary rounded-full text-xs">{cls.status}</span>
                           </td>
                           <td className="px-4 py-4 text-right">
-                             <Button asChild size="sm" variant="ghost" className="h-8 hover:bg-white/10 text-primary">
-                               <Link to="/staff/schedule">Xem</Link>
-                             </Button>
+                            <Button asChild size="sm" variant="ghost" className="h-8 hover:bg-white/10 text-primary">
+                              <Link to="/staff/schedule">Xem</Link>
+                            </Button>
                           </td>
                         </tr>
                       ))}
