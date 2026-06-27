@@ -14,6 +14,7 @@ import { getPartnerDashboardStats, getPartnerClasses, getPartnerBranches } from 
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { toast } from "sonner";
 import { resolveFitnessImage } from "@/lib/imageFallbacks";
+import { clearApiCache } from "@/lib/apiFetch";
 
 // Removed mock data for revenue and attendance
 
@@ -72,26 +73,14 @@ export default function PartnerDashboard() {
   const [newCalories, setNewCalories] = useState(500);
   const [newThumbnailUrl, setNewThumbnailUrl] = useState("");
 
-  const fetchBranches = async () => {
-    try {
-      setLoadingBranches(true);
-      const data = await getPartnerBranches();
-      setBranches(data);
-      if (data.length > 0) {
-        setNewBranchId(data[0].branchId);
-      }
-    } catch (error) {
-      console.error("Lỗi khi tải chi nhánh:", error);
-    } finally {
-      setLoadingBranches(false);
-    }
-  };
-
   const fetchClasses = async () => {
     try {
       setLoadingClasses(true);
+      clearApiCache(`${import.meta.env.VITE_API_BASE_URL}/api/classes/partner`);
       const partnerClasses = await getPartnerClasses();
-      const sorted = partnerClasses.sort((a: ClassDto, b: ClassDto) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      const sorted = partnerClasses.sort(
+        (a: ClassDto, b: ClassDto) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      );
       setClasses(sorted);
     } catch (error) {
       console.error("Lỗi khi tải danh sách lớp học:", error);

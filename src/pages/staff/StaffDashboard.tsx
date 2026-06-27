@@ -111,8 +111,10 @@ export default function StaffDashboard() {
       const branchUserIds = new Set<string>();
       logsData.forEach(log => { if (log.userId) branchUserIds.add(log.userId); });
       bookingsData.forEach(booking => {
-        const b = booking as Record<string, unknown>;
-        if (typeof b.userId === 'string' && b.userId) branchUserIds.add(b.userId);
+        const b = booking as any;
+        if (b && typeof b.userId === 'string' && b.userId) {
+          branchUserIds.add(b.userId);
+        }
       });
 
       const today = getDateKey(new Date().toISOString());
