@@ -21,7 +21,6 @@ import { Link } from "react-router-dom";
 // Real APIs
 import { getLogsForManagerApi, type CheckInLogDto } from "@/api/checkInLog";
 import { getClassesForStaffApi, type ClassDto } from "@/api/classes";
-import { getAllUsersApi, type UserDto } from "@/api/users";
 import { getStaffCheckInBookingsApi, type BookingResponse } from "@/api/bookings";
 
 const getDateKey = (value: string | undefined | null) => {
@@ -100,21 +99,20 @@ export default function StaffDashboard() {
       setLoading(true);
       setError(null);
 
-      const [logsData, classesData, usersData, bookingsData] = await Promise.all([
+      // ── 3 APIs run in parallel (removed getAllUsersApi – too heavy) ──
+      const [logsData, classesData, bookingsData] = await Promise.all([
         getLogsForManagerApi().catch(() => [] as CheckInLogDto[]),
         getClassesForStaffApi().catch(() => [] as ClassDto[]),
-        getAllUsersApi().catch(() => [] as UserDto[]),
         getStaffCheckInBookingsApi().catch(() => [] as BookingResponse[]),
       ]);
 
       // Identify unique user IDs who have interacted with this branch
+      // (derived from logs + bookings — no need to load all system users)
       const branchUserIds = new Set<string>();
       logsData.forEach(log => { if (log.userId) branchUserIds.add(log.userId); });
       bookingsData.forEach(booking => {
-        if (booking.userEmail) {
-          const user = (usersData as UserDto[]).find(u => u.email === booking.userEmail);
-          if (user) branchUserIds.add(user.userId);
-        }
+        const b = booking as Record<string, unknown>;
+        if (typeof b.userId === 'string' && b.userId) branchUserIds.add(b.userId);
       });
 
       const today = getDateKey(new Date().toISOString());
@@ -132,7 +130,7 @@ export default function StaffDashboard() {
 
       setStats({
         todayCheckIns: todayLogs.length,
-        membersInGym: todayLogs.filter(l => l.status === "Success").length, // Simplification for active members
+        membersInGym: todayLogs.filter(l => l.status === "Success").length,
         classesTonight: todayCls.length,
         totalMembers: branchUserIds.size,
       });

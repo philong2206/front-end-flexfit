@@ -92,10 +92,7 @@ export default function AdminUsersPage() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchUsers();
-    }, 0);
-    return () => clearTimeout(timer);
+    fetchUsers();
   }, []);
 
   useEffect(() => {
@@ -200,7 +197,7 @@ export default function AdminUsersPage() {
           gymId: selectedRole === "GymPartner" ? selectedRelationId : undefined,
           branchId: selectedRole === "Staff" ? selectedRelationId : undefined,
         };
-        console.log("ASSIGN ROLE PAYLOAD:", payload);
+        if (import.meta.env.DEV) console.log("ASSIGN ROLE PAYLOAD:", payload);
         await assignRoleApi(payload);
         toast.success(`Đã gán vai trò ${selectedRole} thành công!`);
       } else {

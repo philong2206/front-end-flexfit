@@ -96,7 +96,6 @@ export default function StaffCheckInPage() {
     try {
       setLoadingLogs(true);
       const data = await getLogsForManagerApi();
-      console.log("CHECKIN HISTORY RESPONSE", data);
 
       const todayStr = new Date().toDateString();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

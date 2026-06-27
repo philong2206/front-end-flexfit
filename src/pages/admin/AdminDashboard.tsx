@@ -9,7 +9,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { getAllGymsApi, changeGymStatusApi, type GymDto } from "@/api/gyms";
+import { changeGymStatusApi, type GymDto } from "@/api/gyms";
 import { getAdminDashboardApi, type AdminDashboardResponse } from "@/api/adminDashboard";
 import { getSystemLogsApi, type SystemLog } from "@/api/systemLog";
 
@@ -24,43 +24,31 @@ export default function AdminDashboard() {
   const [logsError, setLogsError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchGyms = async () => {
-      try {
-        const data = await getAllGymsApi();
-        setGyms(data);
-      } catch {
-        setGyms([]);
-      }
-    };
-
-    const fetchLogs = async () => {
-      try {
-        setLoadingLogs(true);
-        setLogsError(null);
-        const logData = await getSystemLogsApi({ pageSize: 5 });
-        setSystemLogs(logData.logs || []);
-      } catch (error) {
-        setSystemLogs([]);
-        setLogsError(error instanceof Error ? error.message : "Không tải được nhật ký hệ thống.");
-      } finally {
-        setLoadingLogs(false);
-      }
-    };
-
-    fetchGyms();
-    fetchLogs();
-    
+    // ── Run dashboard stats + system logs IN PARALLEL ─────────────────────
     setLoadingStats(true);
     setStatsError(false);
-    getAdminDashboardApi()
-      .then((data) => {
-        setDashboardStats(data);
+    setLoadingLogs(true);
+    setLogsError(null);
+
+    Promise.all([
+      getAdminDashboardApi(),
+      getSystemLogsApi({ pageSize: 5 }),
+    ])
+      .then(([dashData, logData]) => {
+        setDashboardStats(dashData);
+        // Reuse gyms already fetched inside getAdminDashboardApi (no extra call)
+        setGyms(dashData.gyms ?? []);
+        setSystemLogs(logData.logs || []);
       })
-      .catch(() => {
+      .catch((error) => {
         setDashboardStats(null);
         setStatsError(true);
+        setLogsError(error instanceof Error ? error.message : "Không tải được dữ liệu.");
       })
-      .finally(() => setLoadingStats(false));
+      .finally(() => {
+        setLoadingStats(false);
+        setLoadingLogs(false);
+      });
   }, []);
 
   const pendingGyms = gyms.filter(g => g.status === 'Pending');

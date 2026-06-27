@@ -155,7 +155,7 @@ export default function PartnerGymsPage() {
         // sau đó mới cập nhật thông tin branch
         if (isGalleryModified) {
           try {
-            console.log("Đang cập nhật gallery cho branchId:", formDialog.branchId);
+            if (import.meta.env.DEV) console.log("Đang cập nhật gallery cho branchId:", formDialog.branchId);
             await updateBranchImagesApi(formDialog.branchId, { images: galleryImages });
           } catch (imgErr) {
             console.error("Lỗi cập nhật gallery:", imgErr);

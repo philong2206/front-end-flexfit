@@ -101,28 +101,39 @@ export default function PartnerDashboard() {
   };
 
   useEffect(() => {
+    // ── All three data sources IN PARALLEL ─────────────────────────────────
     setLoadingStats(true);
-    getPartnerDashboardStats()
-      .then((data) => {
-        setDashboardStats(data);
+    setLoadingBranches(true);
+    setLoadingClasses(true);
+
+    Promise.all([
+      getPartnerDashboardStats(),
+      getPartnerBranches(),
+      getPartnerClasses(),
+    ])
+      .then(([statsData, branchData, classData]) => {
+        setDashboardStats(statsData);
         setStatsError(null);
+        setBranches(branchData);
+        if (branchData.length > 0) setNewBranchId(branchData[0].branchId);
+        const sorted = (classData as ClassDto[]).sort(
+          (a: ClassDto, b: ClassDto) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+        );
+        setClasses(sorted);
       })
       .catch((error) => {
-        console.error("Lỗi khi tải thống kê partner:", error);
+        console.error("Lỗi khi tải dữ liệu partner:", error);
         setStatsError(error instanceof Error ? error.message : "Chưa có dữ liệu thống kê từ server");
         setDashboardStats({
-          revenue: 0,
-          newCustomers: 0,
-          totalBookings: 0,
-          occupancyRate: 0,
-          revenueData: [],
-          attendanceData: []
+          revenue: 0, newCustomers: 0, totalBookings: 0,
+          occupancyRate: 0, revenueData: [], attendanceData: []
         });
       })
-      .finally(() => setLoadingStats(false));
-
-    fetchBranches();
-    fetchClasses();
+      .finally(() => {
+        setLoadingStats(false);
+        setLoadingBranches(false);
+        setLoadingClasses(false);
+      });
   }, []);
 
   const chartRevenueData = dashboardStats?.revenueData || [];

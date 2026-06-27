@@ -1,5 +1,5 @@
 import { getAllUsersApi } from "./users";
-import { getAllGymsApi } from "./gyms";
+import { getAllGymsApi, type GymDto } from "./gyms";
 import { getPackagesApi } from "./payment";
 
 export interface AdminDashboardResponse {
@@ -10,6 +10,7 @@ export interface AdminDashboardResponse {
   totalBookings: number | null; // null means API unsupported or failed
   platformGrowthData: Array<{ name: string; users: number }>;
   subscriptionData: Array<{ name: string; value: number; color: string }>;
+  gyms: GymDto[]; // exposed so callers avoid a duplicate getAllGymsApi() call
 }
 
 const PACKAGE_COLORS = ['#60a5fa', '#34d399', '#f472b6'];
@@ -49,25 +50,16 @@ const shouldUsePackageRecord = (next: Record<string, unknown>, current: Record<s
 
 const getRoleNamesFromValue = (value: unknown): string[] => {
   if (!value) return [];
-
-  if (typeof value === 'string') {
-    return [value];
-  }
-
-  if (Array.isArray(value)) {
-    return value.flatMap(getRoleNamesFromValue);
-  }
-
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(getRoleNamesFromValue);
   if (typeof value === 'object') {
     const role = value as Record<string, unknown>;
     const directNames = [role.role, role.roleName, role.name]
       .filter((name): name is string => typeof name === 'string');
     const nestedNames = [role.roles, role.userRoles, role.roleNavigation]
       .flatMap(getRoleNamesFromValue);
-
     return [...directNames, ...nestedNames];
   }
-
   return [];
 };
 
@@ -79,9 +71,8 @@ const getUserRoleNames = (user: unknown) => {
     .filter(Boolean);
 };
 
-const checkRole = (user: unknown, roleToCheck: string) => {
-  return getUserRoleNames(user).some(role => role.toLowerCase() === roleToCheck.toLowerCase());
-};
+const checkRole = (user: unknown, roleToCheck: string) =>
+  getUserRoleNames(user).some(role => role.toLowerCase() === roleToCheck.toLowerCase());
 
 const hasAnyRoleData = (user: unknown) => getUserRoleNames(user).length > 0;
 
@@ -93,33 +84,22 @@ const getOwnerId = (gym: unknown) => {
 };
 
 export const getAdminDashboardApi = async (): Promise<AdminDashboardResponse> => {
-  let users: unknown[] = [];
-  let usersLoaded = false;
-  try {
-    const res = await getAllUsersApi();
-    users = unwrapResponse(res);
-    usersLoaded = true;
-  } catch {
-    // Keep null totals when the users endpoint is unavailable.
-  }
+  // ── Fetch all three data sources IN PARALLEL ─────────────────────────────
+  const [usersResult, gymsResult, packagesResult] = await Promise.allSettled([
+    getAllUsersApi(),
+    getAllGymsApi(),
+    getPackagesApi(),
+  ]);
 
-  let gyms: unknown[] = [];
-  let gymsLoaded = false;
-  try {
-    const res = await getAllGymsApi();
-    gyms = unwrapResponse(res);
-    gymsLoaded = true;
-  } catch {
-    // Keep null totals when the gyms endpoint is unavailable.
-  }
+  const usersLoaded = usersResult.status === "fulfilled";
+  const gymsLoaded = gymsResult.status === "fulfilled";
 
-  let packages: unknown[] = [];
-  try {
-    const res = await getPackagesApi();
-    packages = unwrapResponse(res);
-  } catch {
-    // Keep package chart empty when the payment packages endpoint is unavailable.
-  }
+  const users: unknown[] = usersLoaded ? unwrapResponse(usersResult.value) : [];
+  const gymDtos: GymDto[] = gymsLoaded ? (unwrapResponse(gymsResult.value) as GymDto[]) : [];
+  const gyms: unknown[] = gymDtos;
+  const packages: unknown[] = packagesResult.status === "fulfilled"
+    ? unwrapResponse(packagesResult.value)
+    : [];
 
   const totalBookings: number | null = null;
 
@@ -144,7 +124,6 @@ export const getAdminDashboardApi = async (): Promise<AdminDashboardResponse> =>
     }
   });
 
-  // Sort chronologically if possible, or just build array
   const platformGrowthData = Array.from(growthMap.entries()).map(([name, usersCount]) => ({
     name,
     users: usersCount
@@ -183,6 +162,7 @@ export const getAdminDashboardApi = async (): Promise<AdminDashboardResponse> =>
     totalGyms,
     totalBookings,
     platformGrowthData,
-    subscriptionData
+    subscriptionData,
+    gyms: gymDtos,
   };
 };
